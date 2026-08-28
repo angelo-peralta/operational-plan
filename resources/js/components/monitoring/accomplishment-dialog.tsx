@@ -17,15 +17,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import {
-    store,
-    update,
-} from '@/routes/monitoring/accomplishments';
 import type {
     MonitoringPlanItem,
     MonitoringReportingPeriod,
     TargetOperator,
 } from '@/types';
+import { store, update } from '@/routes/monitoring/accomplishments';
 
 const percentageOperators: Array<TargetOperator | null> = [
     null,
