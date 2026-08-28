@@ -2,9 +2,10 @@
 
 namespace App\Policies;
 
+use App\Enums\OperationalPlanStatus;
+use App\Models\AcademicYear;
 use App\Models\OperationalPlan;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class OperationalPlanPolicy
 {
@@ -13,7 +14,9 @@ class OperationalPlanPolicy
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->isSuperAdmin()
+            || $user->isReviewer()
+            || ($user->isDepartmentUser() && $user->department_id !== null);
     }
 
     /**
@@ -21,15 +24,22 @@ class OperationalPlanPolicy
      */
     public function view(User $user, OperationalPlan $operationalPlan): bool
     {
-        return false;
+        return $user->isSuperAdmin()
+            || $user->isReviewer()
+            || ($user->isDepartmentUser() && $user->department_id === $operationalPlan->department_id);
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $user, AcademicYear $academicYear): bool
     {
-        return false;
+        if (! $academicYear->isOpen()) {
+            return false;
+        }
+
+        return $user->isSuperAdmin()
+            || ($user->isDepartmentUser() && ($user->department?->isActive() ?? false));
     }
 
     /**
@@ -37,7 +47,46 @@ class OperationalPlanPolicy
      */
     public function update(User $user, OperationalPlan $operationalPlan): bool
     {
-        return false;
+        if (! $operationalPlan->isEditable()) {
+            return false;
+        }
+
+        return $user->isSuperAdmin()
+            || ($user->isDepartmentUser() && $user->department_id === $operationalPlan->department_id);
+    }
+
+    public function submit(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return $this->update($user, $operationalPlan);
+    }
+
+    public function approve(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return ($user->isSuperAdmin() || $user->isReviewer())
+            && $operationalPlan->academicYear->isOpen()
+            && $operationalPlan->status === OperationalPlanStatus::Submitted;
+    }
+
+    public function returnForRevision(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return $this->approve($user, $operationalPlan);
+    }
+
+    public function close(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return $user->isSuperAdmin()
+            && $operationalPlan->academicYear->isOpen()
+            && $operationalPlan->status === OperationalPlanStatus::Approved;
+    }
+
+    public function reopen(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return $user->isSuperAdmin()
+            && $operationalPlan->academicYear->isOpen()
+            && in_array($operationalPlan->status, [
+                OperationalPlanStatus::Approved,
+                OperationalPlanStatus::Closed,
+            ], true);
     }
 
     /**

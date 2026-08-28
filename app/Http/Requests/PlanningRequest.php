@@ -39,6 +39,7 @@ abstract class PlanningRequest extends FormRequest
         }
 
         $query = OperationalPlan::query()
+            ->with('academicYear')
             ->whereKey($this->routeIdentifier('operational_plan'))
             ->whereBelongsTo($this->selectedAcademicYear());
         $user = $this->user();
@@ -57,10 +58,14 @@ abstract class PlanningRequest extends FormRequest
             return $this->resolvedKeyResultArea;
         }
 
-        return $this->resolvedKeyResultArea = KeyResultArea::query()
+        $keyResultArea = KeyResultArea::query()
             ->whereKey($this->routeIdentifier('key_result_area'))
             ->whereBelongsTo($this->operationalPlan())
             ->firstOrFail();
+
+        $keyResultArea->setRelation('operationalPlan', $this->operationalPlan());
+
+        return $this->resolvedKeyResultArea = $keyResultArea;
     }
 
     public function planItem(): PlanItem
@@ -69,10 +74,14 @@ abstract class PlanningRequest extends FormRequest
             return $this->resolvedPlanItem;
         }
 
-        return $this->resolvedPlanItem = PlanItem::query()
+        $planItem = PlanItem::query()
             ->whereKey($this->routeIdentifier('plan_item'))
             ->whereBelongsTo($this->keyResultArea())
             ->firstOrFail();
+
+        $planItem->setRelation('keyResultArea', $this->keyResultArea());
+
+        return $this->resolvedPlanItem = $planItem;
     }
 
     private function routeIdentifier(string $parameter): int
@@ -83,7 +92,11 @@ abstract class PlanningRequest extends FormRequest
             return (int) $value->getKey();
         }
 
-        abort_unless(is_numeric($value) && (int) $value > 0, 404);
+        $isPositiveInteger = is_string($value)
+            && ctype_digit($value)
+            && (int) $value > 0;
+
+        abort_unless($isPositiveInteger, 404);
 
         return (int) $value;
     }

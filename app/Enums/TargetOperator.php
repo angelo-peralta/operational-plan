@@ -28,6 +28,15 @@ enum TargetOperator: string
         };
     }
 
+    public function supportsAccomplishmentPercentage(): bool
+    {
+        return in_array($this, [
+            self::Equals,
+            self::AtLeast,
+            self::PercentageAtLeast,
+        ], true);
+    }
+
     /**
      * Get the operators formatted for selection controls.
      *

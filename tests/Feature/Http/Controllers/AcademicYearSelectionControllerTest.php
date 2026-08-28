@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
+use App\Models\OperationalPlan;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -96,4 +97,40 @@ test('academic year context falls back to the latest year when there is no curre
         ->assertInertia(fn (Assert $page) => $page
             ->where('selectedAcademicYear.id', $latestAcademicYear->id),
         );
+});
+
+test('selecting another academic year from a plan detail redirects to the dashboard', function () {
+    $currentAcademicYear = AcademicYear::factory()->current()->create([
+        'name' => 'AY 2025-2026',
+        'start_year' => 2025,
+        'end_year' => 2026,
+    ]);
+    $historicalAcademicYear = AcademicYear::factory()->closed()->create([
+        'name' => 'AY 2024-2025',
+        'start_year' => 2024,
+        'end_year' => 2025,
+    ]);
+    $departmentUser = User::factory()->departmentUser()->create();
+    $operationalPlan = OperationalPlan::factory()->create([
+        'academic_year_id' => $currentAcademicYear->id,
+        'department_id' => $departmentUser->department_id,
+        'created_by' => $departmentUser->id,
+        'updated_by' => $departmentUser->id,
+    ]);
+
+    $response = $this
+        ->actingAs($departmentUser)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $currentAcademicYear->id])
+        ->from(route('operational-plans.show', [
+            'current_team' => $departmentUser->currentTeam,
+            'operational_plan' => $operationalPlan,
+        ]))
+        ->put(route('academic-years.select', [
+            'current_team' => $departmentUser->currentTeam,
+            'academic_year' => $historicalAcademicYear,
+        ]));
+
+    $response
+        ->assertRedirectToRoute('dashboard', ['current_team' => $departmentUser->currentTeam])
+        ->assertSessionHas(ResolveAcademicYearContext::SESSION_KEY, $historicalAcademicYear->id);
 });

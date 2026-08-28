@@ -3,16 +3,15 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateOperationalPlanRequest extends FormRequest
+class UpdateOperationalPlanRequest extends OperationalPlanFieldsRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return false;
+        return $this->user()?->can('update', $this->operationalPlan()) ?? false;
     }
 
     /**
@@ -23,7 +22,13 @@ class UpdateOperationalPlanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            ...parent::rules(),
+            'department_id' => ['prohibited'],
         ];
+    }
+
+    protected function planningDepartmentId(): ?int
+    {
+        return $this->operationalPlan()->department_id;
     }
 }

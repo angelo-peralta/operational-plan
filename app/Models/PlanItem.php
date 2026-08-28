@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -23,8 +24,8 @@ use Illuminate\Support\Carbon;
  * @property TargetOperator|null $target_operator
  * @property string|null $target_frequency
  * @property string|null $resources_needed
- * @property list<string> $documentary_evidence_requirements
- * @property list<string> $manual_co_accountable_units
+ * @property list<string>|null $documentary_evidence_requirements
+ * @property list<string>|null $manual_co_accountable_units
  * @property int $sort_order
  * @property int $created_by
  * @property int $updated_by
@@ -34,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $creator
  * @property-read User $updater
  * @property-read Collection<int, Department> $coAccountableDepartments
+ * @property-read Collection<int, Accomplishment> $accomplishments
  */
 #[Fillable([
     'key_result_area_id',
@@ -87,6 +89,12 @@ class PlanItem extends Model
             Department::class,
             'plan_item_co_accountables',
         )->orderBy('name');
+    }
+
+    /** @return HasMany<Accomplishment, $this> */
+    public function accomplishments(): HasMany
+    {
+        return $this->hasMany(Accomplishment::class);
     }
 
     /** @return array<string, string> */

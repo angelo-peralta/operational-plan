@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Enums\ReportingPeriodStatus;
 use Database\Factories\ReportingPeriodFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -22,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read AcademicYear $academicYear
+ * @property-read Collection<int, Accomplishment> $accomplishments
  */
 #[Fillable(['academic_year_id', 'name', 'code', 'sequence', 'starts_on', 'ends_on', 'status'])]
 class ReportingPeriod extends Model
@@ -46,6 +49,12 @@ class ReportingPeriod extends Model
     public function academicYear(): BelongsTo
     {
         return $this->belongsTo(AcademicYear::class);
+    }
+
+    /** @return HasMany<Accomplishment, $this> */
+    public function accomplishments(): HasMany
+    {
+        return $this->hasMany(Accomplishment::class);
     }
 
     /**

@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             AcademicYearSeeder::class,
             ReportingPeriodSeeder::class,
             DemoUserSeeder::class,
+            OperationalPlanSeeder::class,
         ]);
     }
 }
