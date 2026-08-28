@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\AcademicYearController;
 use App\Http\Controllers\AcademicYearSelectionController;
+use App\Http\Controllers\AccomplishmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\KeyResultAreaController;
+use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\OperationalPlanApprovalController;
 use App\Http\Controllers\OperationalPlanCloseController;
 use App\Http\Controllers\OperationalPlanController;
@@ -85,6 +87,17 @@ Route::prefix('{current_team}')
             'operational-plans/{operational_plan}/key-result-areas/{key_result_area}/plan-items/{plan_item}',
             [PlanItemController::class, 'destroy'],
         )->name('operational-plans.key-result-areas.plan-items.destroy');
+
+        Route::get('monitoring', MonitoringController::class)
+            ->name('monitoring.index');
+        Route::post(
+            'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments',
+            [AccomplishmentController::class, 'store'],
+        )->name('monitoring.accomplishments.store');
+        Route::patch(
+            'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments/{accomplishment}',
+            [AccomplishmentController::class, 'update'],
+        )->name('monitoring.accomplishments.update');
 
         Route::get('administration/departments', [DepartmentController::class, 'index'])->name('administration.departments.index');
         Route::post('administration/departments', [DepartmentController::class, 'store'])->name('administration.departments.store');

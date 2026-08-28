@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\AcademicYearStatus;
 use App\Models\ReportingPeriod;
 use App\Models\User;
 
@@ -36,7 +37,11 @@ class ReportingPeriodPolicy
      */
     public function update(User $user, ReportingPeriod $reportingPeriod): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSuperAdmin()
+            && in_array($reportingPeriod->academicYear->status, [
+                AcademicYearStatus::Draft,
+                AcademicYearStatus::Open,
+            ], true);
     }
 
     /**

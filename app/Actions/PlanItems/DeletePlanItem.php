@@ -8,6 +8,7 @@ use App\Models\PlanItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 class DeletePlanItem
 {
@@ -31,6 +32,12 @@ class DeletePlanItem
             $lockedPlanItem->setRelation('keyResultArea', $lockedKeyResultArea);
 
             Gate::forUser($actor)->authorize('delete', $lockedPlanItem);
+
+            if ($lockedPlanItem->accomplishments()->exists()) {
+                throw ValidationException::withMessages([
+                    'plan_item' => __('Plan Items with semester accomplishments cannot be removed.'),
+                ]);
+            }
 
             $lockedPlanItem->delete();
         });

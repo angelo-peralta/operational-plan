@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -34,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $creator
  * @property-read User $updater
  * @property-read Collection<int, Department> $coAccountableDepartments
+ * @property-read Collection<int, Accomplishment> $accomplishments
  */
 #[Fillable([
     'key_result_area_id',
@@ -87,6 +89,12 @@ class PlanItem extends Model
             Department::class,
             'plan_item_co_accountables',
         )->orderBy('name');
+    }
+
+    /** @return HasMany<Accomplishment, $this> */
+    public function accomplishments(): HasMany
+    {
+        return $this->hasMany(Accomplishment::class);
     }
 
     /** @return array<string, string> */

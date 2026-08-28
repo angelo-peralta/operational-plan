@@ -7,9 +7,12 @@ use App\Models\Department;
 use App\Models\OperationalPlan;
 use App\Models\OperationalPlanStatusHistory;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('department users see only their plan in the selected academic year', function () {
+    $this->withoutVite();
+
     $selectedAcademicYear = AcademicYear::factory()->open()->create();
     $otherAcademicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
@@ -42,6 +45,8 @@ test('department users see only their plan in the selected academic year', funct
 });
 
 test('reviewers see every department plan only in the selected academic year', function () {
+    $this->withoutVite();
+
     $selectedAcademicYear = AcademicYear::factory()->open()->create();
     $otherAcademicYear = AcademicYear::factory()->open()->create();
     $firstPlan = OperationalPlan::factory()
@@ -66,7 +71,7 @@ test('reviewers see every department plan only in the selected academic year', f
     $response->assertOk()->assertInertia(fn (Assert $page) => $page
         ->component('operational-plans/index')
         ->has('operationalPlans', 2)
-        ->where('operationalPlans', fn (array $plans): bool => collect($plans)->pluck('id')->sort()->values()->all() === collect([$firstPlan->id, $secondPlan->id])->sort()->values()->all())
+        ->where('operationalPlans', fn (Collection $plans): bool => $plans->pluck('id')->sort()->values()->all() === collect([$firstPlan->id, $secondPlan->id])->sort()->values()->all())
         ->has('targetDepartments', 0));
 });
 
