@@ -1,5 +1,11 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, CalendarRange, LayoutGrid, Users } from 'lucide-react';
+import {
+    Building2,
+    CalendarRange,
+    ClipboardList,
+    LayoutGrid,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -17,6 +23,7 @@ import { dashboard, home } from '@/routes';
 import { index as academicYearsIndex } from '@/routes/academic-years';
 import { index as departmentsIndex } from '@/routes/administration/departments';
 import { index as usersIndex } from '@/routes/administration/users';
+import { index as operationalPlansIndex } from '@/routes/operational-plans';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -30,6 +37,15 @@ export function AppSidebar() {
             href: dashboardUrl,
             icon: LayoutGrid,
         },
+        ...(currentTeam
+            ? [
+                  {
+                      title: 'Operational Plans',
+                      href: operationalPlansIndex(currentTeam.slug),
+                      icon: ClipboardList,
+                  },
+              ]
+            : []),
         ...(auth.user.role === 'super_admin' && currentTeam
             ? [
                   {

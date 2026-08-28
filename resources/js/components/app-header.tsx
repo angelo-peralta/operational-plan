@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     CalendarRange,
+    ClipboardList,
     LayoutGrid,
     Menu,
     Users,
@@ -39,6 +40,7 @@ import { dashboard, home } from '@/routes';
 import { index as academicYearsIndex } from '@/routes/academic-years';
 import { index as departmentsIndex } from '@/routes/administration/departments';
 import { index as usersIndex } from '@/routes/administration/users';
+import { index as operationalPlansIndex } from '@/routes/operational-plans';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -61,6 +63,15 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
             href: dashboardUrl,
             icon: LayoutGrid,
         },
+        ...(currentTeam
+            ? [
+                  {
+                      title: 'Operational Plans',
+                      href: operationalPlansIndex(currentTeam.slug),
+                      icon: ClipboardList,
+                  },
+              ]
+            : []),
         ...(auth.user.role === 'super_admin' && currentTeam
             ? [
                   {

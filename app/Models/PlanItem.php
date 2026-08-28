@@ -23,8 +23,8 @@ use Illuminate\Support\Carbon;
  * @property TargetOperator|null $target_operator
  * @property string|null $target_frequency
  * @property string|null $resources_needed
- * @property list<string> $documentary_evidence_requirements
- * @property list<string> $manual_co_accountable_units
+ * @property list<string>|null $documentary_evidence_requirements
+ * @property list<string>|null $manual_co_accountable_units
  * @property int $sort_order
  * @property int $created_by
  * @property int $updated_by

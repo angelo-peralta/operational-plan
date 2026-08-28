@@ -141,3 +141,84 @@
         @apply bg-background text-foreground;
     }
 }
+
+.official-plan-table th,
+.official-plan-table td {
+    border: 1px solid #000;
+    padding: 0.45rem;
+    vertical-align: top;
+    white-space: pre-line;
+}
+
+.official-plan-table th {
+    background: #e2e8f0;
+    text-align: center;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+.official-plan-table ul {
+    list-style: disc;
+    padding-left: 1rem;
+}
+
+.official-plan-table .official-kra-cell {
+    width: 9rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.official-plan-table .official-rating-cell {
+    min-width: 5rem;
+    text-align: center;
+    vertical-align: middle;
+}
+
+@page {
+    size: landscape;
+    margin: 8mm;
+}
+
+@media print {
+    html,
+    body {
+        background: #fff !important;
+        color: #000 !important;
+    }
+
+    .print-actions {
+        display: none !important;
+    }
+
+    .official-plan {
+        min-height: auto;
+        background: #fff !important;
+        padding: 0 !important;
+    }
+
+    .official-plan-sheet {
+        max-width: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .official-plan-table {
+        min-width: 0 !important;
+        font-size: 7.5pt !important;
+        line-height: 1.2 !important;
+    }
+
+    .official-plan-table thead {
+        display: table-header-group;
+    }
+
+    .official-plan-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .official-header {
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+}

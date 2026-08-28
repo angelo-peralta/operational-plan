@@ -3,16 +3,15 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 
-class DeletePlanItemRequest extends FormRequest
+class DeletePlanItemRequest extends PlanningRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return false;
+        return $this->user()?->can('delete', $this->planItem()) ?? false;
     }
 
     /**
@@ -23,7 +22,6 @@ class DeletePlanItemRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
         ];
     }
 }

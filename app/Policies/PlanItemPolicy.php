@@ -2,9 +2,10 @@
 
 namespace App\Policies;
 
+use App\Models\KeyResultArea;
+use App\Models\OperationalPlan;
 use App\Models\PlanItem;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class PlanItemPolicy
 {
@@ -13,7 +14,7 @@ class PlanItemPolicy
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->can('viewAny', OperationalPlan::class);
     }
 
     /**
@@ -21,15 +22,15 @@ class PlanItemPolicy
      */
     public function view(User $user, PlanItem $planItem): bool
     {
-        return false;
+        return $user->can('view', $planItem->keyResultArea->operationalPlan);
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $user, KeyResultArea $keyResultArea): bool
     {
-        return false;
+        return $user->can('update', $keyResultArea->operationalPlan);
     }
 
     /**
@@ -37,7 +38,7 @@ class PlanItemPolicy
      */
     public function update(User $user, PlanItem $planItem): bool
     {
-        return false;
+        return $user->can('update', $planItem->keyResultArea->operationalPlan);
     }
 
     /**
@@ -45,7 +46,12 @@ class PlanItemPolicy
      */
     public function delete(User $user, PlanItem $planItem): bool
     {
-        return false;
+        return $this->update($user, $planItem);
+    }
+
+    public function reorder(User $user, KeyResultArea $keyResultArea): bool
+    {
+        return $user->can('update', $keyResultArea->operationalPlan);
     }
 
     /**

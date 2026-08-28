@@ -3,16 +3,15 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
 
-class ViewOperationalPlanRequest extends FormRequest
+class ViewOperationalPlanRequest extends PlanningRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return false;
+        return $this->user()?->can('view', $this->operationalPlan()) ?? false;
     }
 
     /**
@@ -23,7 +22,6 @@ class ViewOperationalPlanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
         ];
     }
 }

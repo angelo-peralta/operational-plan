@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\PlanItem;
 use App\Models\KeyResultArea;
+use App\Models\PlanItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 

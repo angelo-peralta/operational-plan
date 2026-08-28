@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 
 /**
@@ -43,6 +44,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $returner
  * @property-read User|null $closer
  * @property-read Collection<int, KeyResultArea> $keyResultAreas
+ * @property-read Collection<int, PlanItem> $planItems
  * @property-read Collection<int, OperationalPlanStatusHistory> $statusHistories
  */
 #[Fillable([
@@ -132,6 +134,12 @@ class OperationalPlan extends Model
     public function keyResultAreas(): HasMany
     {
         return $this->hasMany(KeyResultArea::class)->orderBy('sort_order');
+    }
+
+    /** @return HasManyThrough<PlanItem, KeyResultArea, $this> */
+    public function planItems(): HasManyThrough
+    {
+        return $this->hasManyThrough(PlanItem::class, KeyResultArea::class);
     }
 
     /** @return HasMany<OperationalPlanStatusHistory, $this> */

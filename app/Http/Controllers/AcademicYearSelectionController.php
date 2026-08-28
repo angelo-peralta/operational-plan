@@ -25,6 +25,6 @@ class AcademicYearSelectionController extends Controller
             'message' => __('Academic Year changed to :name.', ['name' => $academicYear->name]),
         ]);
 
-        return back();
+        return to_route('dashboard', ['current_team' => $currentTeam]);
     }
 }

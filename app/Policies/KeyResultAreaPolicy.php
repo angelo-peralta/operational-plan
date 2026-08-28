@@ -3,8 +3,8 @@
 namespace App\Policies;
 
 use App\Models\KeyResultArea;
+use App\Models\OperationalPlan;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class KeyResultAreaPolicy
 {
@@ -13,7 +13,7 @@ class KeyResultAreaPolicy
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->can('viewAny', OperationalPlan::class);
     }
 
     /**
@@ -21,15 +21,15 @@ class KeyResultAreaPolicy
      */
     public function view(User $user, KeyResultArea $keyResultArea): bool
     {
-        return false;
+        return $user->can('view', $keyResultArea->operationalPlan);
     }
 
     /**
      * Determine whether the user can create models.
      */
-    public function create(User $user): bool
+    public function create(User $user, OperationalPlan $operationalPlan): bool
     {
-        return false;
+        return $user->can('update', $operationalPlan);
     }
 
     /**
@@ -37,7 +37,12 @@ class KeyResultAreaPolicy
      */
     public function update(User $user, KeyResultArea $keyResultArea): bool
     {
-        return false;
+        return $user->can('update', $keyResultArea->operationalPlan);
+    }
+
+    public function reorder(User $user, OperationalPlan $operationalPlan): bool
+    {
+        return $user->can('update', $operationalPlan);
     }
 
     /**
