@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
+use App\Models\Evidence;
 use App\Models\PlanItem;
 use App\Models\ReportingPeriod;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,6 +20,8 @@ abstract class MonitoringRequest extends FormRequest
     private ?PlanItem $resolvedPlanItem = null;
 
     private ?Accomplishment $resolvedAccomplishment = null;
+
+    private ?Evidence $resolvedEvidence = null;
 
     public function selectedAcademicYear(): AcademicYear
     {
@@ -93,11 +96,27 @@ abstract class MonitoringRequest extends FormRequest
         return $this->resolvedAccomplishment = $accomplishment;
     }
 
+    public function evidence(): Evidence
+    {
+        if ($this->resolvedEvidence !== null) {
+            return $this->resolvedEvidence;
+        }
+
+        $evidence = Evidence::query()
+            ->with('accomplishment.planItem.keyResultArea.operationalPlan.academicYear')
+            ->whereKey($this->routeIdentifier('evidence'))
+            ->whereBelongsTo($this->accomplishment())
+            ->firstOrFail();
+        $evidence->setRelation('accomplishment', $this->accomplishment());
+
+        return $this->resolvedEvidence = $evidence;
+    }
+
     private function routeIdentifier(string $parameter): int
     {
         $value = $this->route($parameter);
 
-        if ($value instanceof Accomplishment || $value instanceof PlanItem || $value instanceof ReportingPeriod) {
+        if ($value instanceof Accomplishment || $value instanceof Evidence || $value instanceof PlanItem || $value instanceof ReportingPeriod) {
             return (int) $value->getKey();
         }
 

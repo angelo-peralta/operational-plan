@@ -45,6 +45,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property-read Collection<int, OperationalPlan> $returnedOperationalPlans
  * @property-read Collection<int, OperationalPlan> $submittedOperationalPlans
  * @property-read Collection<int, Accomplishment> $submittedAccomplishments
+ * @property-read Collection<int, Evidence> $uploadedEvidence
  * @property-read Collection<int, Team> $teams
  * @property-read Collection<int, OperationalPlan> $updatedOperationalPlans
  */
@@ -102,6 +103,12 @@ class User extends Authenticatable implements PasskeyUser
     public function submittedAccomplishments(): HasMany
     {
         return $this->hasMany(Accomplishment::class, 'submitted_by');
+    }
+
+    /** @return HasMany<Evidence, $this> */
+    public function uploadedEvidence(): HasMany
+    {
+        return $this->hasMany(Evidence::class, 'uploaded_by');
     }
 
     /** @return HasMany<OperationalPlan, $this> */

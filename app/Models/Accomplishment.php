@@ -5,9 +5,11 @@ namespace App\Models;
 use App\Enums\AccomplishmentStatus;
 use Database\Factories\AccomplishmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -26,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property-read PlanItem $planItem
  * @property-read ReportingPeriod $reportingPeriod
  * @property-read User|null $submitter
+ * @property-read Collection<int, Evidence> $evidence
  */
 #[Fillable([
     'plan_item_id',
@@ -64,6 +67,12 @@ class Accomplishment extends Model
     public function submitter(): BelongsTo
     {
         return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    /** @return HasMany<Evidence, $this> */
+    public function evidence(): HasMany
+    {
+        return $this->hasMany(Evidence::class);
     }
 
     /** @return array<string, string> */

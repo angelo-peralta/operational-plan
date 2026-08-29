@@ -3,6 +3,7 @@ import {
     Building2,
     CalendarRange,
     ClipboardList,
+    Gauge,
     LayoutGrid,
     Users,
 } from 'lucide-react';
@@ -19,12 +20,13 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import type { NavItem } from '@/types';
 import { dashboard, home } from '@/routes';
 import { index as academicYearsIndex } from '@/routes/academic-years';
 import { index as departmentsIndex } from '@/routes/administration/departments';
 import { index as usersIndex } from '@/routes/administration/users';
+import { index as monitoringIndex } from '@/routes/monitoring';
 import { index as operationalPlansIndex } from '@/routes/operational-plans';
-import type { NavItem } from '@/types';
 
 export function AppSidebar() {
     const page = usePage();
@@ -43,6 +45,11 @@ export function AppSidebar() {
                       title: 'Operational Plans',
                       href: operationalPlansIndex(currentTeam.slug),
                       icon: ClipboardList,
+                  },
+                  {
+                      title: 'Monitoring',
+                      href: monitoringIndex(currentTeam.slug),
+                      icon: Gauge,
                   },
               ]
             : []),
