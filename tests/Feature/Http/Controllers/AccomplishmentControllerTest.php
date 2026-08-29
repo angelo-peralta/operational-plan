@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\AccomplishmentStatus;
+use App\Enums\OperationalPlanStatus;
+use App\Enums\ReportingPeriodStatus;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
@@ -160,4 +162,158 @@ test('accomplishment input rejects client controlled scope and workflow fields',
 
     $response->assertInvalid(['status', 'percentage_accomplished', 'submitted_by']);
     $this->assertDatabaseEmpty('accomplishments');
+});
+
+test('accomplishment creation returns 404 for records outside the selected academic year', function () {
+    extract(accomplishmentContext());
+    $otherAcademicYear = AcademicYear::factory()->open()->create();
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $otherAcademicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Should not save']);
+
+    $response->assertNotFound();
+    $this->assertDatabaseEmpty('accomplishments');
+});
+
+test('accomplishment updates return 404 when the nested accomplishment belongs to another plan item', function () {
+    extract(accomplishmentContext());
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create([
+        'accomplishment_text' => 'Original report',
+    ]);
+    $otherPlanItem = PlanItem::factory()->for($planItem->keyResultArea)->create();
+    $otherAccomplishment = Accomplishment::factory()->for($otherPlanItem)->for($period)->create([
+        'accomplishment_text' => 'Other report',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->patch(route('monitoring.accomplishments.update', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+            'accomplishment' => $otherAccomplishment,
+        ]), ['accomplishment_text' => 'Tampered report']);
+
+    $response->assertNotFound();
+    expect($accomplishment->fresh()->accomplishment_text)->toBe('Original report');
+    expect($otherAccomplishment->fresh()->accomplishment_text)->toBe('Other report');
+});
+
+test('a duplicate accomplishment for the same plan item and period is rejected', function () {
+    extract(accomplishmentContext());
+    $existingAccomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Duplicate report']);
+
+    $response->assertInvalid('accomplishment');
+    expect(Accomplishment::query()->sole()->is($existingAccomplishment))->toBeTrue();
+});
+
+test('the same plan item accepts a distinct accomplishment in the second semester', function () {
+    extract(accomplishmentContext());
+    Accomplishment::factory()->for($planItem)->for($period)->create();
+    $secondSemester = ReportingPeriod::factory()
+        ->open()
+        ->secondSemester()
+        ->for($academicYear)
+        ->create();
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $secondSemester,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Second semester report']);
+
+    $response->assertSessionHasNoErrors()->assertRedirect();
+    expect(Accomplishment::query()->orderBy('reporting_period_id')->pluck('reporting_period_id')->all())
+        ->toContain($period->id, $secondSemester->id)
+        ->toHaveCount(2);
+});
+
+test('reviewers cannot author department accomplishments', function () {
+    extract(accomplishmentContext());
+    $reviewer = User::factory()->reviewer()->create();
+
+    $response = $this->actingAs($reviewer)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $reviewer->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Should not save']);
+
+    $response->assertForbidden();
+    $this->assertDatabaseEmpty('accomplishments');
+});
+
+test('unapproved and closed operational plans forbid accomplishment creation', function (OperationalPlanStatus $status) {
+    extract(accomplishmentContext());
+    $plan->update(['status' => $status]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Should not save']);
+
+    $response->assertForbidden();
+    $this->assertDatabaseEmpty('accomplishments');
+})->with([
+    'draft plan' => OperationalPlanStatus::Draft,
+    'submitted plan' => OperationalPlanStatus::Submitted,
+    'returned plan' => OperationalPlanStatus::Returned,
+    'closed plan' => OperationalPlanStatus::Closed,
+]);
+
+test('reporting periods that are not open forbid accomplishment creation', function (ReportingPeriodStatus $status) {
+    extract(accomplishmentContext());
+    $period->update(['status' => $status]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), ['accomplishment_text' => 'Should not save']);
+
+    $response->assertForbidden();
+    $this->assertDatabaseEmpty('accomplishments');
+})->with([
+    'draft period' => ReportingPeriodStatus::Draft,
+    'closed period' => ReportingPeriodStatus::Closed,
+]);
+
+test('submitted accomplishments cannot be changed through the draft update endpoint', function () {
+    extract(accomplishmentContext());
+    $accomplishment = Accomplishment::factory()->submitted()->for($planItem)->for($period)->create([
+        'accomplishment_text' => 'Submitted report',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->patch(route('monitoring.accomplishments.update', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+            'accomplishment' => $accomplishment,
+        ]), ['accomplishment_text' => 'Changed after submission']);
+
+    $response->assertForbidden();
+    expect($accomplishment->fresh()->accomplishment_text)->toBe('Submitted report');
 });

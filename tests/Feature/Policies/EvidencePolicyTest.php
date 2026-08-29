@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AccomplishmentStatus;
+use App\Enums\ReportingPeriodStatus;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
 use App\Models\Department;
@@ -54,3 +55,33 @@ test('returned accomplishments accept additional evidence but finalized accompli
     'accepted' => [AccomplishmentStatus::Accepted, false],
     'rejected' => [AccomplishmentStatus::Rejected, false],
 ]);
+
+test('draft and closed reporting periods reject evidence uploads', function (ReportingPeriodStatus $periodStatus) {
+    $academicYear = AcademicYear::factory()->open()->create();
+    $department = Department::factory()->create();
+    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $period = ReportingPeriod::factory()->for($academicYear)->create(['status' => $periodStatus]);
+    $plan = OperationalPlan::factory()->approved()->for($academicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($plan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+
+    expect($departmentUser->can('create', [Evidence::class, $accomplishment]))->toBeFalse();
+})->with([
+    'draft reporting period' => ReportingPeriodStatus::Draft,
+    'closed reporting period' => ReportingPeriodStatus::Closed,
+]);
+
+test('evidence uploads reject a reporting period from another academic year', function () {
+    $planAcademicYear = AcademicYear::factory()->open()->create();
+    $periodAcademicYear = AcademicYear::factory()->open()->create();
+    $department = Department::factory()->create();
+    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $period = ReportingPeriod::factory()->open()->for($periodAcademicYear)->create();
+    $plan = OperationalPlan::factory()->approved()->for($planAcademicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($plan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+
+    expect($departmentUser->can('create', [Evidence::class, $accomplishment]))->toBeFalse();
+});

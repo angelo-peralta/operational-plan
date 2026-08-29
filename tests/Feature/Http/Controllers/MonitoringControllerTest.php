@@ -74,6 +74,33 @@ test('reviewers can monitor all departments but cannot author accomplishment dra
         ->where('operationalPlans.1.keyResultAreas.0.planItems.0.permissions.createAccomplishment', false));
 });
 
+test('closed academic year monitoring remains visible but read only', function () {
+    $this->withoutVite();
+    $academicYear = AcademicYear::factory()->closed()->create();
+    $department = Department::factory()->create();
+    $user = User::factory()->departmentUser()->forDepartment($department)->create();
+    $period = ReportingPeriod::factory()->closed()->firstSemester()->for($academicYear)->create();
+    $plan = OperationalPlan::factory()->approved()->for($academicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($plan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->get(route('monitoring.index', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+        ]));
+
+    $response->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('academicYear.id', $academicYear->id)
+        ->where('operationalPlans.0.id', $plan->id)
+        ->where('operationalPlans.0.keyResultAreas.0.planItems.0.accomplishment.id', $accomplishment->id)
+        ->where('operationalPlans.0.keyResultAreas.0.planItems.0.permissions.createAccomplishment', false)
+        ->where('operationalPlans.0.keyResultAreas.0.planItems.0.permissions.updateAccomplishment', false)
+        ->where('operationalPlans.0.keyResultAreas.0.planItems.0.accomplishment.permissions.uploadEvidence', false));
+});
+
 test('monitoring rejects reporting periods from another academic year with 404', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $otherAcademicYear = AcademicYear::factory()->open()->create();

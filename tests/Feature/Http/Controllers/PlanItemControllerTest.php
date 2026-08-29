@@ -3,10 +3,12 @@
 use App\Enums\TargetOperator;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
+use App\Models\Accomplishment;
 use App\Models\Department;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
 use App\Models\PlanItem;
+use App\Models\ReportingPeriod;
 use App\Models\User;
 
 /** @param array<string, mixed> $overrides */
@@ -189,6 +191,30 @@ test('department users can delete a plan item from an editable plan', function (
     $response->assertSessionHasNoErrors()->assertRedirect();
     $this->assertModelMissing($planItem);
     $this->assertDatabaseMissing('plan_item_co_accountables', ['plan_item_id' => $planItem->id]);
+});
+
+test('plan items with semester accomplishments cannot be deleted', function () {
+    $academicYear = AcademicYear::factory()->open()->create();
+    $department = Department::factory()->create();
+    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $reportingPeriod = ReportingPeriod::factory()->for($academicYear)->firstSemester()->create();
+    Accomplishment::factory()->for($planItem)->for($reportingPeriod)->create();
+
+    $response = $this
+        ->actingAs($departmentUser)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->delete(route('operational-plans.key-result-areas.plan-items.destroy', [
+            'current_team' => $departmentUser->currentTeam,
+            'operational_plan' => $operationalPlan,
+            'key_result_area' => $keyResultArea,
+            'plan_item' => $planItem,
+        ]));
+
+    $response->assertSessionHasErrors(['plan_item']);
+    $this->assertModelExists($planItem);
 });
 
 test('department users can reorder every plan item in an editable KRA', function () {

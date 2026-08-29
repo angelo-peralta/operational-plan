@@ -25,8 +25,9 @@ class EvidencePolicy
 
         return $user->department_id !== null
             && $user->department_id === $operationalPlan->department_id
+            && $operationalPlan->academic_year_id === $accomplishment->reportingPeriod->academic_year_id
             && $operationalPlan->status === OperationalPlanStatus::Approved
-            && $operationalPlan->academicYear->isOpen()
+            && $accomplishment->reportingPeriod->acceptsSubmissions()
             && in_array($accomplishment->status, [
                 AccomplishmentStatus::Draft,
                 AccomplishmentStatus::Returned,

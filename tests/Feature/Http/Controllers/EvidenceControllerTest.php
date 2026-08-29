@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ReportingPeriodStatus;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
@@ -150,6 +151,48 @@ test('closed academic years forbid evidence uploads without deleting existing ev
 
     $response->assertForbidden();
     expect(Evidence::query()->sole()->is($existingEvidence))->toBeTrue();
+});
+
+test('draft and closed reporting periods forbid evidence uploads', function (ReportingPeriodStatus $periodStatus) {
+    Storage::fake('local');
+    extract(evidenceContext());
+    $period->update(['status' => $periodStatus]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.evidence.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+            'accomplishment' => $accomplishment,
+        ]), ['file' => UploadedFile::fake()->create('report.pdf', 100, 'application/pdf')]);
+
+    $response->assertForbidden();
+    $this->assertDatabaseEmpty('evidence');
+    expect(Storage::disk('local')->allFiles())->toBeEmpty();
+})->with([
+    'draft reporting period' => ReportingPeriodStatus::Draft,
+    'closed reporting period' => ReportingPeriodStatus::Closed,
+]);
+
+test('evidence upload routes reject reporting periods from another academic year', function () {
+    Storage::fake('local');
+    extract(evidenceContext());
+    $otherAcademicYear = AcademicYear::factory()->open()->create();
+    $otherPeriod = ReportingPeriod::factory()->open()->for($otherAcademicYear)->create();
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.evidence.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $otherPeriod,
+            'plan_item' => $planItem,
+            'accomplishment' => $accomplishment,
+        ]), ['file' => UploadedFile::fake()->create('report.pdf', 100, 'application/pdf')]);
+
+    $response->assertNotFound();
+    $this->assertDatabaseEmpty('evidence');
+    expect(Storage::disk('local')->allFiles())->toBeEmpty();
 });
 
 test('evidence routes reject records outside the selected academic year', function () {

@@ -13,6 +13,7 @@ use App\Models\ReportingPeriod;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -91,35 +92,41 @@ class MonitoringController extends Controller
                 'department:id,name,code',
                 'keyResultAreas:id,operational_plan_id,code,name,description,sort_order',
                 'keyResultAreas.planItems:id,key_result_area_id,objective,strategy,kpi_target_text,target_value,target_unit,target_operator,target_frequency,documentary_evidence_requirements,sort_order',
-                'keyResultAreas.planItems.accomplishments' => fn (Builder $query): Builder => $query
-                    ->select([
-                        'id',
-                        'plan_item_id',
-                        'reporting_period_id',
-                        'reported_value',
-                        'accomplishment_text',
-                        'percentage_accomplished',
-                        'status',
-                        'submitted_at',
-                        'resubmitted_at',
-                        'updated_at',
-                    ])
-                    ->whereBelongsTo($reportingPeriod)
-                    ->with(['evidence' => fn (Builder $query): Builder => $query
+                'keyResultAreas.planItems.accomplishments' => function (Relation $relation) use ($reportingPeriod): void {
+                    $relation->getQuery()
                         ->select([
                             'id',
-                            'accomplishment_id',
-                            'evidence_type',
-                            'title',
-                            'description',
-                            'original_filename',
-                            'mime_type',
-                            'file_size',
-                            'uploaded_by',
-                            'created_at',
+                            'plan_item_id',
+                            'reporting_period_id',
+                            'reported_value',
+                            'accomplishment_text',
+                            'percentage_accomplished',
+                            'status',
+                            'submitted_at',
+                            'resubmitted_at',
+                            'updated_at',
                         ])
-                        ->with('uploader:id,name')
-                        ->oldest()]),
+                        ->whereBelongsTo($reportingPeriod)
+                        ->with([
+                            'evidence' => function (Relation $relation): void {
+                                $relation->getQuery()
+                                    ->select([
+                                        'id',
+                                        'accomplishment_id',
+                                        'evidence_type',
+                                        'title',
+                                        'description',
+                                        'original_filename',
+                                        'mime_type',
+                                        'file_size',
+                                        'uploaded_by',
+                                        'created_at',
+                                    ])
+                                    ->with('uploader:id,name')
+                                    ->oldest();
+                            },
+                        ]);
+                },
             ])
             ->whereBelongsTo($academicYear)
             ->whereIn('status', [
