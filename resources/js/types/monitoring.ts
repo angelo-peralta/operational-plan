@@ -30,6 +30,25 @@ export type Accomplishment = {
     submittedAt: string | null;
     resubmittedAt: string | null;
     updatedAt: string | null;
+    evidence: Evidence[];
+    permissions: {
+        uploadEvidence: boolean;
+    };
+};
+
+export type Evidence = {
+    id: number;
+    evidenceType: string | null;
+    title: string | null;
+    description: string | null;
+    originalFilename: string;
+    mimeType: string;
+    fileSize: number;
+    uploadedBy: {
+        id: number;
+        name: string;
+    };
+    createdAt: string | null;
 };
 
 export type MonitoringPlanItemPermissions = {

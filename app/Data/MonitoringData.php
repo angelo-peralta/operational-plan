@@ -4,6 +4,7 @@ namespace App\Data;
 
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
+use App\Models\Evidence;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
 use App\Models\PlanItem;
@@ -105,7 +106,7 @@ class MonitoringData
             'documentaryEvidenceRequirements' => $planItem->documentary_evidence_requirements ?? [],
             'sortOrder' => $planItem->sort_order,
             'accomplishment' => $accomplishment instanceof Accomplishment
-                ? self::accomplishment($accomplishment)
+                ? self::accomplishment($accomplishment, $user)
                 : null,
             'permissions' => [
                 'createAccomplishment' => $accomplishment === null
@@ -121,7 +122,7 @@ class MonitoringData
     }
 
     /** @return array<string, mixed> */
-    private static function accomplishment(Accomplishment $accomplishment): array
+    private static function accomplishment(Accomplishment $accomplishment, User $user): array
     {
         return [
             'id' => $accomplishment->id,
@@ -133,6 +134,25 @@ class MonitoringData
             'submittedAt' => $accomplishment->submitted_at?->toISOString(),
             'resubmittedAt' => $accomplishment->resubmitted_at?->toISOString(),
             'updatedAt' => $accomplishment->updated_at?->toISOString(),
+            'evidence' => $accomplishment->evidence
+                ->map(fn (Evidence $evidence): array => [
+                    'id' => $evidence->id,
+                    'evidenceType' => $evidence->evidence_type,
+                    'title' => $evidence->title,
+                    'description' => $evidence->description,
+                    'originalFilename' => $evidence->original_filename,
+                    'mimeType' => $evidence->mime_type,
+                    'fileSize' => $evidence->file_size,
+                    'uploadedBy' => [
+                        'id' => $evidence->uploader->id,
+                        'name' => $evidence->uploader->name,
+                    ],
+                    'createdAt' => $evidence->created_at?->toISOString(),
+                ])
+                ->values(),
+            'permissions' => [
+                'uploadEvidence' => Gate::forUser($user)->allows('create', [Evidence::class, $accomplishment]),
+            ],
         ];
     }
 }
