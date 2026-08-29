@@ -104,7 +104,22 @@ class MonitoringController extends Controller
                         'resubmitted_at',
                         'updated_at',
                     ])
-                    ->whereBelongsTo($reportingPeriod),
+                    ->whereBelongsTo($reportingPeriod)
+                    ->with(['evidence' => fn (Builder $query): Builder => $query
+                        ->select([
+                            'id',
+                            'accomplishment_id',
+                            'evidence_type',
+                            'title',
+                            'description',
+                            'original_filename',
+                            'mime_type',
+                            'file_size',
+                            'uploaded_by',
+                            'created_at',
+                        ])
+                        ->with('uploader:id,name')
+                        ->oldest()]),
             ])
             ->whereBelongsTo($academicYear)
             ->whereIn('status', [

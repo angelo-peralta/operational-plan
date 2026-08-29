@@ -1,7 +1,16 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ClipboardCheck, FileText, PencilLine, Plus } from 'lucide-react';
+import {
+    ClipboardCheck,
+    Download,
+    ExternalLink,
+    FileText,
+    PencilLine,
+    Plus,
+    Upload,
+} from 'lucide-react';
 import Heading from '@/components/heading';
 import { AccomplishmentDialog } from '@/components/monitoring/accomplishment-dialog';
+import { EvidenceUploadDialog } from '@/components/monitoring/evidence-upload-dialog';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,8 +35,20 @@ import type {
 } from '@/types';
 import { dashboard } from '@/routes';
 import { index } from '@/routes/monitoring';
+import {
+    download as downloadEvidence,
+    show as showEvidence,
+} from '@/routes/monitoring/accomplishments/evidence';
 
-function AccomplishmentSummary({ planItem }: { planItem: MonitoringPlanItem }) {
+function AccomplishmentSummary({
+    teamSlug,
+    reportingPeriod,
+    planItem,
+}: {
+    teamSlug: string;
+    reportingPeriod: MonitoringReportingPeriod;
+    planItem: MonitoringPlanItem;
+}) {
     const accomplishment = planItem.accomplishment;
 
     if (!accomplishment) {
@@ -68,6 +89,99 @@ function AccomplishmentSummary({ planItem }: { planItem: MonitoringPlanItem }) {
                     {accomplishment.accomplishmentText}
                 </p>
             )}
+            <div className="grid gap-2 border-t pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">
+                        Uploaded evidence ({accomplishment.evidence.length})
+                    </p>
+                    {accomplishment.permissions.uploadEvidence && (
+                        <EvidenceUploadDialog
+                            teamSlug={teamSlug}
+                            reportingPeriod={reportingPeriod}
+                            planItem={planItem}
+                            accomplishment={accomplishment}
+                            trigger={
+                                <Button size="sm" variant="outline">
+                                    <Upload /> Upload evidence
+                                </Button>
+                            }
+                        />
+                    )}
+                </div>
+                {accomplishment.evidence.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                        No documentary evidence uploaded yet.
+                    </p>
+                ) : (
+                    <ul className="grid gap-2">
+                        {accomplishment.evidence.map((evidence) => {
+                            const routeParameters = [
+                                teamSlug,
+                                reportingPeriod.id,
+                                planItem.id,
+                                accomplishment.id,
+                                evidence.id,
+                            ] as const;
+
+                            return (
+                                <li
+                                    key={evidence.id}
+                                    className="flex flex-col justify-between gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-medium">
+                                            {evidence.title ||
+                                                evidence.originalFilename}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {evidence.originalFilename} ·{' '}
+                                            {Math.max(
+                                                1,
+                                                Math.ceil(
+                                                    evidence.fileSize / 1024,
+                                                ),
+                                            ).toLocaleString()}{' '}
+                                            KB · {evidence.uploadedBy.name}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            asChild
+                                            size="icon"
+                                            variant="ghost"
+                                        >
+                                            <a
+                                                href={showEvidence.url(
+                                                    routeParameters,
+                                                )}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                aria-label={`View ${evidence.originalFilename}`}
+                                            >
+                                                <ExternalLink />
+                                            </a>
+                                        </Button>
+                                        <Button
+                                            asChild
+                                            size="icon"
+                                            variant="ghost"
+                                        >
+                                            <a
+                                                href={downloadEvidence.url(
+                                                    routeParameters,
+                                                )}
+                                                aria-label={`Download ${evidence.originalFilename}`}
+                                            >
+                                                <Download />
+                                            </a>
+                                        </Button>
+                                    </div>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 }
@@ -125,7 +239,11 @@ function PlanItemCard({
                         </p>
                     </div>
                 )}
-                <AccomplishmentSummary planItem={planItem} />
+                <AccomplishmentSummary
+                    teamSlug={teamSlug}
+                    reportingPeriod={reportingPeriod}
+                    planItem={planItem}
+                />
                 {planItem.documentaryEvidenceRequirements.length > 0 && (
                     <div className="text-sm">
                         <p className="flex items-center gap-2 font-medium">

@@ -5,6 +5,7 @@ use App\Http\Controllers\AcademicYearSelectionController;
 use App\Http\Controllers\AccomplishmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepartmentController;
+use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\KeyResultAreaController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\OperationalPlanApprovalController;
@@ -98,6 +99,18 @@ Route::prefix('{current_team}')
             'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments/{accomplishment}',
             [AccomplishmentController::class, 'update'],
         )->name('monitoring.accomplishments.update');
+        Route::post(
+            'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments/{accomplishment}/evidence',
+            [EvidenceController::class, 'store'],
+        )->name('monitoring.accomplishments.evidence.store');
+        Route::get(
+            'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments/{accomplishment}/evidence/{evidence}',
+            [EvidenceController::class, 'show'],
+        )->name('monitoring.accomplishments.evidence.show');
+        Route::get(
+            'monitoring/reporting-periods/{reporting_period}/plan-items/{plan_item}/accomplishments/{accomplishment}/evidence/{evidence}/download',
+            [EvidenceController::class, 'download'],
+        )->name('monitoring.accomplishments.evidence.download');
 
         Route::get('administration/departments', [DepartmentController::class, 'index'])->name('administration.departments.index');
         Route::post('administration/departments', [DepartmentController::class, 'store'])->name('administration.departments.store');
