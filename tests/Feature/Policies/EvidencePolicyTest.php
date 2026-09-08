@@ -17,7 +17,7 @@ test('evidence permissions enforce department ownership and reviewer read-only a
     $department = Department::factory()->create();
     $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $administrator = User::factory()->superAdmin()->create();
     $period = ReportingPeriod::factory()->open()->for($academicYear)->create();
     $plan = OperationalPlan::factory()->approved()->for($academicYear, 'academicYear')->for($department)->create();
@@ -52,6 +52,7 @@ test('returned accomplishments accept additional evidence but finalized accompli
     'draft' => [AccomplishmentStatus::Draft, true],
     'returned' => [AccomplishmentStatus::Returned, true],
     'submitted' => [AccomplishmentStatus::Submitted, false],
+    'ready for review' => [AccomplishmentStatus::UnderReview, false],
     'accepted' => [AccomplishmentStatus::Accepted, false],
     'rejected' => [AccomplishmentStatus::Rejected, false],
 ]);

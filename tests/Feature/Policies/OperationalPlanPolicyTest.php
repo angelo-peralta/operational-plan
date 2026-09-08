@@ -13,7 +13,6 @@ test('operational plan permissions enforce role department status and academic y
     $otherDepartment = Department::factory()->create();
     $inactiveDepartment = Department::factory()->inactive()->create();
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
     $assignedUser = User::factory()->departmentUser()->forDepartment($assignedDepartment)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->forDepartment($otherDepartment)->create();
     $inactiveDepartmentUser = User::factory()->departmentUser()->forDepartment($inactiveDepartment)->create();
@@ -47,6 +46,8 @@ test('operational plan permissions enforce role department status and academic y
         ->for($closedAcademicYear, 'academicYear')
         ->for($assignedDepartment)
         ->create();
+
+    $reviewer = User::factory()->executiveOver(...Department::query()->get()->all())->create();
 
     expect([
         'administrator.viewAny' => Gate::forUser($administrator)->allows('viewAny', OperationalPlan::class),
@@ -95,7 +96,7 @@ test('operational plan permissions enforce role department status and academic y
         'otherUser.viewOther' => false,
         'administrator.createOpen' => true,
         'administrator.createClosed' => false,
-        'reviewer.createOpen' => false,
+        'reviewer.createOpen' => true,
         'assignedUser.createOpen' => true,
         'inactiveUser.createOpen' => false,
         'assignedUser.createClosed' => false,
@@ -106,9 +107,9 @@ test('operational plan permissions enforce role department status and academic y
         'assignedUser.updateOwnDraft' => true,
         'otherUser.updateOtherDraft' => false,
         'assignedUser.updateClosedYear' => false,
-        'assignedUser.submitDraft' => true,
+        'assignedUser.submitDraft' => false,
         'reviewer.approveSubmitted' => true,
-        'administrator.approveSubmitted' => true,
+        'administrator.approveSubmitted' => false,
         'assignedUser.approveSubmitted' => false,
         'reviewer.approveReturned' => false,
         'reviewer.returnSubmitted' => true,

@@ -13,12 +13,15 @@ use Laravel\Passkeys\Contracts\PasskeyLoginResponse;
 test('login screen can be rendered', function () {
     $response = $this->get(route('login'));
 
-    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->component('auth/login')
+        ->where('canResetPassword', true),
+    );
 });
 
 test('login screen includes team invitation context', function () {
     $owner = User::factory()->create();
-    $team = Team::factory()->create(['name' => 'Laravel Team']);
+    $team = Team::factory()->create(['name' => 'SPUP-OPS Team']);
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
 
     $invitation = TeamInvitation::factory()->create([
@@ -33,7 +36,7 @@ test('login screen includes team invitation context', function () {
     $response->assertInertia(fn (Assert $page) => $page
         ->component('auth/login')
         ->where('teamInvitation.code', $invitation->code)
-        ->where('teamInvitation.teamName', 'Laravel Team'),
+        ->where('teamInvitation.teamName', 'SPUP-OPS Team'),
     );
 });
 

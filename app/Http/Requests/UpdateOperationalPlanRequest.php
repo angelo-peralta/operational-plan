@@ -23,12 +23,13 @@ class UpdateOperationalPlanRequest extends OperationalPlanFieldsRequest
     {
         return [
             ...parent::rules(),
+            'organizational_unit_id' => ['prohibited'],
             'department_id' => ['prohibited'],
         ];
     }
 
-    protected function planningDepartmentId(): ?int
+    protected function planningOrganizationalUnitId(): ?int
     {
-        return $this->operationalPlan()->department_id;
+        return $this->operationalPlan()->organizational_unit_id;
     }
 }

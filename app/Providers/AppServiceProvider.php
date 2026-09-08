@@ -2,7 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\Accomplishment;
+use App\Models\Evaluation;
+use App\Models\Evidence;
+use App\Models\KeyResultArea;
+use App\Models\OperationalPlan;
+use App\Models\PlanItem;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +30,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Relation::enforceMorphMap([
+            'operational_plan' => OperationalPlan::class,
+            'key_result_area' => KeyResultArea::class,
+            'plan_item' => PlanItem::class,
+            'accomplishment' => Accomplishment::class,
+            'evidence' => Evidence::class,
+            'evaluation' => Evaluation::class,
+        ]);
+
         $this->configureDefaults();
     }
 

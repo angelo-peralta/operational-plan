@@ -2,15 +2,15 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Department;
 use App\Models\OperationalPlan;
+use App\Models\OrganizationalUnit;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreOperationalPlanRequest extends OperationalPlanFieldsRequest
 {
-    private ?Department $resolvedDepartment = null;
+    private ?OrganizationalUnit $resolvedOrganizationalUnit = null;
 
     /**
      * Determine if the user is authorized to make this request.
@@ -30,27 +30,23 @@ class StoreOperationalPlanRequest extends OperationalPlanFieldsRequest
      */
     public function rules(): array
     {
-        $departmentRule = $this->user()?->isSuperAdmin()
-            ? ['required', 'integer', Rule::exists(Department::class, 'id')->where('is_active', true)]
-            : ['prohibited'];
-
         return [
             ...parent::rules(),
-            'department_id' => $departmentRule,
+            'organizational_unit_id' => ['required', 'integer', Rule::exists(OrganizationalUnit::class, 'id')->where('is_active', true), Rule::in($this->organizationalScope()->manageableUnitIds($this->user()))],
         ];
     }
 
-    public function department(): Department
+    public function organizationalUnit(): OrganizationalUnit
     {
-        if ($this->resolvedDepartment !== null) {
-            return $this->resolvedDepartment;
+        if ($this->resolvedOrganizationalUnit !== null) {
+            return $this->resolvedOrganizationalUnit;
         }
 
-        $departmentId = $this->planningDepartmentId();
+        $organizationalUnitId = $this->planningOrganizationalUnitId();
 
-        abort_if($departmentId === null, 422);
+        abort_if($organizationalUnitId === null, 422);
 
-        return $this->resolvedDepartment = Department::query()->findOrFail($departmentId);
+        return $this->resolvedOrganizationalUnit = OrganizationalUnit::query()->findOrFail($organizationalUnitId);
     }
 
     /** @return array<callable> */
@@ -59,31 +55,27 @@ class StoreOperationalPlanRequest extends OperationalPlanFieldsRequest
         return [
             ...parent::after(),
             function (Validator $validator): void {
-                $departmentId = $this->planningDepartmentId();
+                $organizationalUnitId = $this->planningOrganizationalUnitId();
 
-                if ($departmentId === null || $validator->errors()->has('department_id')) {
+                if ($organizationalUnitId === null || $validator->errors()->has('organizational_unit_id')) {
                     return;
                 }
 
                 if (OperationalPlan::query()
                     ->whereBelongsTo($this->selectedAcademicYear())
-                    ->where('department_id', $departmentId)
+                    ->where('organizational_unit_id', $organizationalUnitId)
                     ->exists()) {
                     $validator->errors()->add(
-                        'department_id',
-                        __('This department already has an Operational Plan for the selected Academic Year.'),
+                        'organizational_unit_id',
+                        __('This organizational unit already has an Operational Plan for the selected Academic Year.'),
                     );
                 }
             },
         ];
     }
 
-    protected function planningDepartmentId(): ?int
+    protected function planningOrganizationalUnitId(): ?int
     {
-        if ($this->user()?->isSuperAdmin()) {
-            return $this->filled('department_id') ? $this->integer('department_id') : null;
-        }
-
-        return $this->user()?->department_id;
+        return $this->filled('organizational_unit_id') ? $this->integer('organizational_unit_id') : null;
     }
 }

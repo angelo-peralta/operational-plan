@@ -3,10 +3,11 @@
 namespace App\Http\Requests;
 
 use App\Enums\TargetOperator;
-use App\Models\Department;
+use App\Models\OrganizationalUnit;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 abstract class PlanItemFieldsRequest extends PlanningRequest
 {
@@ -28,12 +29,12 @@ abstract class PlanItemFieldsRequest extends PlanningRequest
             'resources_needed' => ['nullable', 'string', 'max:20000'],
             'documentary_evidence_requirements' => ['nullable', 'array', 'max:50'],
             'documentary_evidence_requirements.*' => ['required', 'string', 'distinct', 'max:500'],
-            'co_accountable_department_ids' => ['nullable', 'array', 'max:50'],
-            'co_accountable_department_ids.*' => [
+            'co_accountable_organizational_unit_ids' => ['nullable', 'array', 'max:50'],
+            'co_accountable_organizational_unit_ids.*' => [
                 'required',
                 'integer',
                 'distinct',
-                Rule::exists(Department::class, 'id'),
+                Rule::exists(OrganizationalUnit::class, 'id')->where('is_active', true),
             ],
             'manual_co_accountable_units' => ['nullable', 'array', 'max:50'],
             'manual_co_accountable_units.*' => ['required', 'string', 'distinct', 'max:100'],
@@ -76,23 +77,46 @@ abstract class PlanItemFieldsRequest extends PlanningRequest
     }
 
     /** @return list<int> */
-    public function coAccountableDepartmentIds(): array
+    public function coAccountableOrganizationalUnitIds(): array
     {
-        $input = $this->input('co_accountable_department_ids', []);
+        $input = $this->input('co_accountable_organizational_unit_ids', []);
 
         if (! is_array($input)) {
             return [];
         }
 
-        $departmentIds = [];
+        $organizationalUnitIds = [];
 
         foreach ($input as $id) {
             if (is_numeric($id)) {
-                $departmentIds[] = (int) $id;
+                $organizationalUnitIds[] = (int) $id;
             }
         }
 
-        return $departmentIds;
+        return $organizationalUnitIds;
+    }
+
+    /** @return array<callable> */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('manual_co_accountable_units')) {
+                return;
+            }
+
+            $configuredNames = OrganizationalUnit::query()
+                ->where('is_active', true)
+                ->get(['name', 'code', 'acronym'])
+                ->flatMap(fn (OrganizationalUnit $unit): array => array_filter([$unit->name, $unit->code, $unit->acronym]))
+                ->map(fn (string $name): string => Str::lower(Str::squish($name)))
+                ->all();
+
+            foreach ($this->stringList('manual_co_accountable_units') as $index => $manualUnit) {
+                if (in_array(Str::lower(Str::squish($manualUnit)), $configuredNames, true)) {
+                    $validator->errors()->add("manual_co_accountable_units.$index", __('Select the configured organizational unit instead of entering it manually.'));
+                }
+            }
+        }];
     }
 
     protected function prepareForValidation(): void

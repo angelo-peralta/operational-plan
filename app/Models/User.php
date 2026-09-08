@@ -24,6 +24,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
+ * @property string|null $entra_tenant_id
+ * @property string|null $entra_object_id
  * @property string $password
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -31,6 +33,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string|null $remember_token
  * @property int|null $current_team_id
  * @property int|null $department_id
+ * @property int|null $role_id
  * @property UserRole $role
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -39,18 +42,30 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property-read Collection<int, OperationalPlan> $approvedOperationalPlans
  * @property-read Collection<int, OperationalPlan> $closedOperationalPlans
  * @property-read Collection<int, OperationalPlan> $createdOperationalPlans
+ * @property-read Collection<int, OrganizationalUnitUserAssignment> $organizationalUnitAssignments
  * @property-read Department|null $department
+ * @property-read Role|null $operationalRole
  * @property-read Collection<int, Team> $ownedTeams
  * @property-read Collection<int, Membership> $teamMemberships
  * @property-read Collection<int, OperationalPlan> $returnedOperationalPlans
+ * @property-read Collection<int, Evaluation> $reviewedEvaluations
  * @property-read Collection<int, OperationalPlan> $submittedOperationalPlans
  * @property-read Collection<int, Accomplishment> $submittedAccomplishments
  * @property-read Collection<int, Evidence> $uploadedEvidence
  * @property-read Collection<int, Team> $teams
  * @property-read Collection<int, OperationalPlan> $updatedOperationalPlans
  */
-#[Fillable(['name', 'email', 'password', 'current_team_id', 'department_id', 'role'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Fillable(['name', 'email', 'password', 'current_team_id', 'department_id', 'role_id', 'role'])]
+#[Hidden([
+    'password',
+    'legacy_role',
+    'legacy_role_id',
+    'entra_tenant_id',
+    'entra_object_id',
+    'two_factor_secret',
+    'two_factor_recovery_codes',
+    'remember_token',
+])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
@@ -62,7 +77,7 @@ class User extends Authenticatable implements PasskeyUser
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'role' => 'department_user',
+        'role' => 'staff',
     ];
 
     /**
@@ -73,6 +88,12 @@ class User extends Authenticatable implements PasskeyUser
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /** @return BelongsTo<Role, $this> */
+    public function operationalRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'role_id');
     }
 
     /** @return HasMany<OperationalPlan, $this> */
@@ -111,6 +132,12 @@ class User extends Authenticatable implements PasskeyUser
         return $this->hasMany(Evidence::class, 'uploaded_by');
     }
 
+    /** @return HasMany<Evaluation, $this> */
+    public function reviewedEvaluations(): HasMany
+    {
+        return $this->hasMany(Evaluation::class, 'reviewer_id');
+    }
+
     /** @return HasMany<OperationalPlan, $this> */
     public function approvedOperationalPlans(): HasMany
     {
@@ -134,31 +161,52 @@ class User extends Authenticatable implements PasskeyUser
      */
     public function hasRole(UserRole $role): bool
     {
-        return $this->role === $role;
+        return $this->accessLevel() === $role;
+    }
+
+    public function accessLevel(): UserRole
+    {
+        return $this->role;
+    }
+
+    public function roleLabel(): string
+    {
+        return $this->role->label();
+    }
+
+    public function isOfficeHead(): bool
+    {
+        return $this->hasRole(UserRole::OfficeHead);
+    }
+
+    /** @return HasMany<OrganizationalUnitUserAssignment, $this> */
+    public function organizationalUnitAssignments(): HasMany
+    {
+        return $this->hasMany(OrganizationalUnitUserAssignment::class);
     }
 
     /**
      * Determine whether the user is a super administrator.
      */
-    public function isSuperAdmin(): bool
+    public function isSystemAdmin(): bool
     {
-        return $this->hasRole(UserRole::SuperAdmin);
+        return $this->hasRole(UserRole::SystemAdmin);
     }
 
     /**
      * Determine whether the user is a reviewer.
      */
-    public function isReviewer(): bool
+    public function isExecutive(): bool
     {
-        return $this->hasRole(UserRole::Reviewer);
+        return $this->hasRole(UserRole::Executive);
     }
 
     /**
      * Determine whether the user is a department user.
      */
-    public function isDepartmentUser(): bool
+    public function isStaff(): bool
     {
-        return $this->hasRole(UserRole::DepartmentUser);
+        return $this->hasRole(UserRole::Staff);
     }
 
     /**

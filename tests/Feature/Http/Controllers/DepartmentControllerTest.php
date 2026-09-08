@@ -3,7 +3,6 @@
 use App\Models\Department;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
-use Inertia\Testing\AssertableInertia as Assert;
 
 test('super administrators can view the department index', function () {
     $department = Department::factory()->create([
@@ -17,13 +16,7 @@ test('super administrators can view the department index', function () {
         ->actingAs($administrator)
         ->get(route('administration.departments.index', ['current_team' => $administrator->currentTeam]));
 
-    $response->assertOk()->assertInertia(fn (Assert $page) => $page
-        ->component('administration/departments/index')
-        ->has('departments', 1)
-        ->where('departments.0.name', 'Planning Office')
-        ->where('departments.0.code', 'PLAN')
-        ->where('departments.0.userCount', 1),
-    );
+    $response->assertRedirectToRoute('administration.organizational-units.index', ['current_team' => $administrator->currentTeam]);
 });
 
 test('reviewers cannot view the department administration index', function () {
@@ -36,7 +29,7 @@ test('reviewers cannot view the department administration index', function () {
     $response->assertForbidden();
 });
 
-test('super administrators can create departments', function () {
+test('legacy department creation is disabled even for administrators', function () {
     $administrator = User::factory()->superAdmin()->create();
 
     $response = $this
@@ -48,13 +41,8 @@ test('super administrators can create departments', function () {
             'is_active' => true,
         ]);
 
-    $response->assertSessionHasNoErrors()->assertRedirect();
-    $this->assertDatabaseHas('departments', [
-        'name' => 'Planning Office',
-        'code' => 'PLAN',
-        'description' => 'Institutional planning',
-        'is_active' => true,
-    ]);
+    $response->assertForbidden();
+    $this->assertDatabaseMissing('organizational_units', ['code' => 'PLAN']);
 });
 
 test('department users cannot create departments', function () {
@@ -69,10 +57,10 @@ test('department users cannot create departments', function () {
         ]);
 
     $response->assertForbidden();
-    $this->assertDatabaseMissing('departments', ['code' => 'PLAN']);
+    $this->assertDatabaseMissing('organizational_units', ['code' => 'PLAN']);
 });
 
-test('super administrators can update departments', function () {
+test('legacy department updates cannot bypass hierarchy validation', function () {
     $department = Department::factory()->create([
         'name' => 'Planning',
         'code' => 'PLN',
@@ -91,14 +79,8 @@ test('super administrators can update departments', function () {
             'is_active' => false,
         ]);
 
-    $response->assertSessionHasNoErrors()->assertRedirect();
-    $this->assertDatabaseHas('departments', [
-        'id' => $department->id,
-        'name' => 'Planning Office',
-        'code' => 'PLAN',
-        'description' => 'Updated description',
-        'is_active' => false,
-    ]);
+    $response->assertForbidden();
+    expect($department->fresh()->name)->toBe('Planning');
 });
 
 test('reviewers cannot update departments', function () {

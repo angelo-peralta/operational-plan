@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
@@ -13,6 +14,11 @@ use Illuminate\Foundation\Http\FormRequest;
 
 abstract class MonitoringRequest extends FormRequest
 {
+    protected function organizationalScope(): ResolveOrganizationalScope
+    {
+        return $this->container->make(ResolveOrganizationalScope::class);
+    }
+
     private ?AcademicYear $resolvedAcademicYear = null;
 
     private ?ReportingPeriod $resolvedReportingPeriod = null;
@@ -68,13 +74,11 @@ abstract class MonitoringRequest extends FormRequest
                 },
             );
 
-        if ($user?->isDepartmentUser()) {
-            abort_if($user->department_id === null, 404);
-            $query->whereHas(
-                'keyResultArea.operationalPlan',
-                fn (Builder $query): Builder => $query->where('department_id', $user->department_id),
-            );
-        }
+        abort_unless($user !== null, 404);
+        $query->whereHas(
+            'keyResultArea.operationalPlan',
+            fn (Builder $query): Builder => $query->whereIn('organizational_unit_id', $this->organizationalScope()->visibleUnitIds($user)),
+        );
 
         return $this->resolvedPlanItem = $query->firstOrFail();
     }

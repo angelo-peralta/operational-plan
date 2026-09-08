@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Enums\AccomplishmentStatus;
 use App\Enums\OperationalPlanStatus;
 use App\Models\Accomplishment;
@@ -11,14 +12,14 @@ use App\Models\User;
 
 class AccomplishmentPolicy
 {
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin()
-            || $user->isReviewer()
-            || ($user->isDepartmentUser() && $user->department_id !== null);
+        return $user->isSystemAdmin() || $this->scope->visibleUnitIds($user) !== [];
     }
 
     /**
@@ -28,9 +29,7 @@ class AccomplishmentPolicy
     {
         $operationalPlan = $accomplishment->planItem->keyResultArea->operationalPlan;
 
-        return $user->isSuperAdmin()
-            || $user->isReviewer()
-            || ($user->isDepartmentUser() && $user->department_id === $operationalPlan->department_id);
+        return $this->scope->canViewUnit($user, $operationalPlan->organizational_unit_id);
     }
 
     /**
@@ -41,7 +40,7 @@ class AccomplishmentPolicy
         PlanItem $planItem,
         ReportingPeriod $reportingPeriod,
     ): bool {
-        return $this->canAuthorDraft($user, $planItem, $reportingPeriod);
+        return $this->canAuthor($user, $planItem, $reportingPeriod);
     }
 
     /**
@@ -49,8 +48,28 @@ class AccomplishmentPolicy
      */
     public function update(User $user, Accomplishment $accomplishment): bool
     {
-        return $accomplishment->status === AccomplishmentStatus::Draft
-            && $this->canAuthorDraft(
+        return in_array($accomplishment->status, [
+            AccomplishmentStatus::Draft,
+            AccomplishmentStatus::Returned,
+        ], true)
+            && $this->canAuthor(
+                $user,
+                $accomplishment->planItem,
+                $accomplishment->reportingPeriod,
+            );
+    }
+
+    /**
+     * Determine whether the user can submit or resubmit the accomplishment.
+     */
+    public function submit(User $user, Accomplishment $accomplishment): bool
+    {
+        return $this->scope->canSubmitUnit($user, $accomplishment->planItem->keyResultArea->operationalPlan->organizational_unit_id)
+            && in_array($accomplishment->status, [
+                AccomplishmentStatus::Draft,
+                AccomplishmentStatus::Returned,
+            ], true)
+            && $this->canAuthor(
                 $user,
                 $accomplishment->planItem,
                 $accomplishment->reportingPeriod,
@@ -81,19 +100,18 @@ class AccomplishmentPolicy
         return false;
     }
 
-    private function canAuthorDraft(
+    private function canAuthor(
         User $user,
         PlanItem $planItem,
         ReportingPeriod $reportingPeriod,
     ): bool {
-        if (! $user->isDepartmentUser()) {
+        if ($user->isSystemAdmin()) {
             return false;
         }
 
         $operationalPlan = $planItem->keyResultArea->operationalPlan;
 
-        return $user->department_id !== null
-            && $user->department_id === $operationalPlan->department_id
+        return $this->scope->canManageUnit($user, $operationalPlan->organizational_unit_id)
             && $operationalPlan->academic_year_id === $reportingPeriod->academic_year_id
             && $operationalPlan->status === OperationalPlanStatus::Approved
             && $reportingPeriod->acceptsSubmissions();

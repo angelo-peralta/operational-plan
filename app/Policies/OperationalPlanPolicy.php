@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Enums\OperationalPlanStatus;
 use App\Models\AcademicYear;
 use App\Models\OperationalPlan;
@@ -9,60 +10,39 @@ use App\Models\User;
 
 class OperationalPlanPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin()
-            || $user->isReviewer()
-            || ($user->isDepartmentUser() && $user->department_id !== null);
+        return $user->isSystemAdmin() || $this->scope->visibleUnitIds($user) !== [];
     }
 
-    /**
-     * Determine whether the user can view the model.
-     */
     public function view(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $user->isSuperAdmin()
-            || $user->isReviewer()
-            || ($user->isDepartmentUser() && $user->department_id === $operationalPlan->department_id);
+        return $this->scope->canViewUnit($user, $operationalPlan->organizational_unit_id);
     }
 
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user, AcademicYear $academicYear): bool
     {
-        if (! $academicYear->isOpen()) {
-            return false;
-        }
-
-        return $user->isSuperAdmin()
-            || ($user->isDepartmentUser() && ($user->department?->isActive() ?? false));
+        return $academicYear->isOpen() && $this->scope->manageableUnitIds($user) !== [];
     }
 
-    /**
-     * Determine whether the user can update the model.
-     */
     public function update(User $user, OperationalPlan $operationalPlan): bool
     {
-        if (! $operationalPlan->isEditable()) {
-            return false;
-        }
-
-        return $user->isSuperAdmin()
-            || ($user->isDepartmentUser() && $user->department_id === $operationalPlan->department_id);
+        return $operationalPlan->isEditable()
+            && $this->scope->canManageUnit($user, $operationalPlan->organizational_unit_id);
     }
 
     public function submit(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $this->update($user, $operationalPlan);
+        return $operationalPlan->isEditable()
+            && $this->scope->canSubmitUnit($user, $operationalPlan->organizational_unit_id);
     }
 
     public function approve(User $user, OperationalPlan $operationalPlan): bool
     {
-        return ($user->isSuperAdmin() || $user->isReviewer())
+        return $this->scope->canReviewUnit($user, $operationalPlan->organizational_unit_id)
+            && ! in_array($user->id, [$operationalPlan->created_by, $operationalPlan->submitted_by, $operationalPlan->accountable_user_id], true)
             && $operationalPlan->academicYear->isOpen()
             && $operationalPlan->status === OperationalPlanStatus::Submitted;
     }
@@ -74,40 +54,28 @@ class OperationalPlanPolicy
 
     public function close(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $user->isSuperAdmin()
+        return $user->isSystemAdmin()
             && $operationalPlan->academicYear->isOpen()
             && $operationalPlan->status === OperationalPlanStatus::Approved;
     }
 
     public function reopen(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $user->isSuperAdmin()
+        return $user->isSystemAdmin()
             && $operationalPlan->academicYear->isOpen()
-            && in_array($operationalPlan->status, [
-                OperationalPlanStatus::Approved,
-                OperationalPlanStatus::Closed,
-            ], true);
+            && in_array($operationalPlan->status, [OperationalPlanStatus::Approved, OperationalPlanStatus::Closed], true);
     }
 
-    /**
-     * Determine whether the user can delete the model.
-     */
     public function delete(User $user, OperationalPlan $operationalPlan): bool
     {
         return false;
     }
 
-    /**
-     * Determine whether the user can restore the model.
-     */
     public function restore(User $user, OperationalPlan $operationalPlan): bool
     {
         return false;
     }
 
-    /**
-     * Determine whether the user can permanently delete the model.
-     */
     public function forceDelete(User $user, OperationalPlan $operationalPlan): bool
     {
         return false;

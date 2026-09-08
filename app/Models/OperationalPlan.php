@@ -16,7 +16,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $academic_year_id
- * @property int $department_id
+ * @property int $organizational_unit_id
  * @property int|null $accountable_user_id
  * @property string|null $accountable_name
  * @property string|null $accountable_position
@@ -35,7 +35,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read AcademicYear $academicYear
- * @property-read Department $department
+ * @property-read OrganizationalUnit $organizationalUnit
  * @property-read User|null $accountableUser
  * @property-read User $creator
  * @property-read User $updater
@@ -46,10 +46,11 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, KeyResultArea> $keyResultAreas
  * @property-read Collection<int, PlanItem> $planItems
  * @property-read Collection<int, OperationalPlanStatusHistory> $statusHistories
+ * @property-read Collection<int, Remark> $remarks
  */
 #[Fillable([
     'academic_year_id',
-    'department_id',
+    'organizational_unit_id',
     'accountable_user_id',
     'accountable_name',
     'accountable_position',
@@ -82,10 +83,33 @@ class OperationalPlan extends Model
         return $this->belongsTo(AcademicYear::class);
     }
 
-    /** @return BelongsTo<Department, $this> */
+    /** @return BelongsTo<OrganizationalUnit, $this> */
+    public function organizationalUnit(): BelongsTo
+    {
+        return $this->belongsTo(OrganizationalUnit::class);
+    }
+
+    /**
+     * Compatibility relation for historical factories and archived integrations.
+     * Active application code must use organizationalUnit().
+     *
+     * @return BelongsTo<OrganizationalUnit, $this>
+     */
     public function department(): BelongsTo
     {
-        return $this->belongsTo(Department::class);
+        return $this->organizationalUnit();
+    }
+
+    /** @deprecated Use organizational_unit_id. */
+    public function setDepartmentIdAttribute(int $value): void
+    {
+        $this->attributes['organizational_unit_id'] = $value;
+    }
+
+    /** @deprecated Use organizational_unit_id. */
+    public function getDepartmentIdAttribute(): int
+    {
+        return (int) $this->attributes['organizational_unit_id'];
     }
 
     /** @return BelongsTo<User, $this> */
@@ -148,6 +172,12 @@ class OperationalPlan extends Model
         return $this->hasMany(OperationalPlanStatusHistory::class)
             ->latest('created_at')
             ->latest('id');
+    }
+
+    /** @return HasMany<Remark, $this> */
+    public function remarks(): HasMany
+    {
+        return $this->hasMany(Remark::class);
     }
 
     public function isEditable(): bool

@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\AccomplishmentStatus;
+use App\Enums\OrganizationalUnitType;
 use App\Enums\ReportingPeriodStatus;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
@@ -60,6 +62,43 @@ test('department users upload private evidence with server derived metadata', fu
     Storage::disk('public')->assertMissing($evidence->stored_path);
 });
 
+test('office heads and center staff can upload evidence for approved plans', function () {
+    Storage::fake('local');
+    $academicYear = AcademicYear::factory()->open()->create();
+    $center = Department::factory()->create([
+        'type' => OrganizationalUnitType::Center->value,
+    ]);
+    $period = ReportingPeriod::factory()->open()->for($academicYear)->create();
+    $plan = OperationalPlan::factory()
+        ->approved()
+        ->for($academicYear, 'academicYear')
+        ->for($center)
+        ->create();
+    $keyResultArea = KeyResultArea::factory()->for($plan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+
+    foreach ([
+        User::factory()->officeHead()->forDepartment($center)->create(),
+        User::factory()->departmentUser()->forDepartment($center)->create(),
+    ] as $user) {
+        $response = $this->actingAs($user)
+            ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+            ->post(route('monitoring.accomplishments.evidence.store', [
+                'current_team' => $user->currentTeam,
+                'reporting_period' => $period,
+                'plan_item' => $planItem,
+                'accomplishment' => $accomplishment,
+            ]), [
+                'file' => UploadedFile::fake()->create('center-report.pdf', 100, 'application/pdf'),
+            ]);
+
+        $response->assertSessionHasNoErrors()->assertRedirect();
+    }
+
+    expect(Evidence::query()->count())->toBe(2);
+});
+
 test('evidence upload rejects unsupported and oversized files', function (UploadedFile $file) {
     Storage::fake('local');
     extract(evidenceContext());
@@ -114,7 +153,7 @@ test('reviewers view and download evidence through authorized routes', function 
         'mime_type' => 'application/pdf',
     ]);
     Storage::disk('local')->put($evidence->stored_path, 'private report content');
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $parameters = [
         'current_team' => $reviewer->currentTeam,
         'reporting_period' => $period,
@@ -151,6 +190,25 @@ test('closed academic years forbid evidence uploads without deleting existing ev
 
     $response->assertForbidden();
     expect(Evidence::query()->sole()->is($existingEvidence))->toBeTrue();
+});
+
+test('accomplishments awaiting review reject further evidence uploads', function () {
+    Storage::fake('local');
+    extract(evidenceContext());
+    $accomplishment->update(['status' => AccomplishmentStatus::UnderReview]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.evidence.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+            'accomplishment' => $accomplishment,
+        ]), ['file' => UploadedFile::fake()->create('late-report.pdf', 100, 'application/pdf')]);
+
+    $response->assertForbidden();
+    $this->assertDatabaseEmpty('evidence');
+    expect(Storage::disk('local')->allFiles())->toBeEmpty();
 });
 
 test('draft and closed reporting periods forbid evidence uploads', function (ReportingPeriodStatus $periodStatus) {

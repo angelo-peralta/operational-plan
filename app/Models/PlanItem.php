@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -34,8 +35,9 @@ use Illuminate\Support\Carbon;
  * @property-read KeyResultArea $keyResultArea
  * @property-read User $creator
  * @property-read User $updater
- * @property-read Collection<int, Department> $coAccountableDepartments
+ * @property-read Collection<int, OrganizationalUnit> $coAccountableOrganizationalUnits
  * @property-read Collection<int, Accomplishment> $accomplishments
+ * @property-read Collection<int, Remark> $remarks
  */
 #[Fillable([
     'key_result_area_id',
@@ -82,19 +84,38 @@ class PlanItem extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
-    /** @return BelongsToMany<Department, $this> */
-    public function coAccountableDepartments(): BelongsToMany
+    /** @return BelongsToMany<OrganizationalUnit, $this> */
+    public function coAccountableOrganizationalUnits(): BelongsToMany
     {
         return $this->belongsToMany(
-            Department::class,
+            OrganizationalUnit::class,
             'plan_item_co_accountables',
+            'plan_item_id',
+            'organizational_unit_id',
         )->orderBy('name');
+    }
+
+    /**
+     * Compatibility relation for archived integrations.
+     * Active application code must use coAccountableOrganizationalUnits().
+     *
+     * @return BelongsToMany<OrganizationalUnit, $this>
+     */
+    public function coAccountableDepartments(): BelongsToMany
+    {
+        return $this->coAccountableOrganizationalUnits();
     }
 
     /** @return HasMany<Accomplishment, $this> */
     public function accomplishments(): HasMany
     {
         return $this->hasMany(Accomplishment::class);
+    }
+
+    /** @return MorphMany<Remark, $this> */
+    public function remarks(): MorphMany
+    {
+        return $this->morphMany(Remark::class, 'remarkable');
     }
 
     /** @return array<string, string> */

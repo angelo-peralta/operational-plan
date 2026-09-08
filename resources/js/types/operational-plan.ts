@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'reviewer' | 'department_user';
+export type UserRole = 'system_admin' | 'executive' | 'office_head' | 'staff';
 
 export type AcademicYearStatus = 'draft' | 'open' | 'closed' | 'archived';
 
@@ -9,11 +9,33 @@ export type SelectOption<TValue extends string = string> = {
     label: string;
 };
 
-export type DepartmentSummary = {
+export type OperationalRoleOption = {
+    id: number;
+    label: string;
+    accessLevel: UserRole;
+    requiresDepartment: boolean;
+    isSystem: boolean;
+};
+
+export type OperationalRole = {
+    id: number;
+    name: string;
+    slug: string;
+    description: string | null;
+    accessLevel: UserRole;
+    accessLevelLabel: string;
+    requiresDepartment: boolean;
+    isSystem: boolean;
+    userCount: number;
+};
+
+export type OrganizationalUnitSummary = {
     id: number;
     name: string;
     code: string | null;
 };
+
+export type DepartmentSummary = OrganizationalUnitSummary;
 
 export type AcademicYearOption = {
     id: number;
@@ -34,6 +56,10 @@ export type ReportingPeriod = {
     status: ReportingPeriodStatus;
 };
 
+export type OperationalPlanReportingPeriod = ReportingPeriod & {
+    acceptsSubmissions: boolean;
+};
+
 export type AcademicYear = AcademicYearOption & {
     startsOn: string | null;
     endsOn: string | null;
@@ -52,7 +78,6 @@ export type AdministrationUser = {
     email: string;
     role: UserRole | null;
     roleLabel: string | null;
-    department: DepartmentSummary | null;
     emailVerifiedAt: string | null;
 };
 
@@ -71,23 +96,17 @@ export type TargetOperator =
 export type AccountableUserOption = {
     id: number;
     name: string;
-    departmentId: number;
+    organizationalUnitId: number;
 };
 
-export type DepartmentAccountableUser = {
-    id: number;
-    name: string;
-    department_id: number;
-};
-
-export type CoAccountableDepartment = DepartmentSummary & {
+export type CoAccountableOrganizationalUnit = OrganizationalUnitSummary & {
     isActive: boolean;
 };
 
 export type OperationalPlanSummary = {
     id: number;
     academicYear: AcademicYearOption;
-    department: DepartmentSummary;
+    organizationalUnit: OrganizationalUnitSummary;
     accountableUser: Pick<AdministrationUser, 'id' | 'name'> | null;
     accountableName: string | null;
     accountablePosition: string | null;
@@ -115,8 +134,41 @@ export type PlanItem = {
     resourcesNeeded: string | null;
     documentaryEvidenceRequirements: string[];
     manualCoAccountableUnits: string[];
-    coAccountableDepartments: DepartmentSummary[];
+    coAccountableOrganizationalUnits: OrganizationalUnitSummary[];
     sortOrder: number;
+    accomplishment: {
+        id: number;
+        reportedValue: string | null;
+        accomplishmentText: string | null;
+        percentageAccomplished: string | null;
+        status:
+            | 'draft'
+            | 'submitted'
+            | 'under_review'
+            | 'accepted'
+            | 'returned'
+            | 'rejected';
+        statusLabel: string;
+        submittedAt: string | null;
+        resubmittedAt: string | null;
+        updatedAt: string | null;
+        createdBy: { id: number; name: string } | null;
+        updatedBy: { id: number; name: string } | null;
+        evidence: never[];
+        remarks: OperationalPlanRemark[];
+        submissionBlocker: string | null;
+        submissionHistory: never[];
+        evaluationHistory: never[];
+        permissions: {
+            uploadEvidence: boolean;
+            submitAccomplishment: boolean;
+            createRemark: boolean;
+        };
+    } | null;
+    permissions: {
+        createAccomplishment: boolean;
+        updateAccomplishment: boolean;
+    };
 };
 
 export type KeyResultArea = {
@@ -133,9 +185,51 @@ export type OperationalPlanStatusHistory = {
     fromStatus: OperationalPlanStatus | null;
     toStatus: OperationalPlanStatus;
     toStatusLabel: string;
+    action: string;
+    actorRole: UserRole | null;
+    actorOrganizationalUnitIds: number[];
     remarks: string | null;
     actor: Pick<AdministrationUser, 'id' | 'name'>;
     createdAt: string;
+};
+
+export type OperationalPlanRemark = {
+    id: number;
+    targetType:
+        | 'operational_plan'
+        | 'key_result_area'
+        | 'plan_item'
+        | 'accomplishment'
+        | 'evidence'
+        | 'evaluation';
+    targetId: number;
+    targetLabel: string;
+    anchor: string;
+    fieldKey: string | null;
+    period: { id: number; name: string } | null;
+    category: string;
+    content: string;
+    status: 'open' | 'addressed' | 'resolved';
+    statusLabel: string;
+    author: { id: number; name: string; authority: string };
+    createdAt: string;
+    addressedAt: string | null;
+    resolvedAt: string | null;
+    canAddress: boolean;
+    canResolve: boolean;
+};
+
+export type OperationalPlanReview = {
+    counts: {
+        total: number;
+        open: number;
+        addressed: number;
+        resolved: number;
+        president: number;
+        vicePresident: number;
+    };
+    groups: { label: string; anchor: string; count: number }[];
+    remarks: OperationalPlanRemark[];
 };
 
 export type OperationalPlan = OperationalPlanSummary & {
@@ -151,6 +245,9 @@ export type OperationalPlanPermissions = {
     closePlan: boolean;
     reopenPlan: boolean;
     createKeyResultArea: boolean;
+    updateKeyResultArea: boolean;
+    deleteKeyResultArea: boolean;
     reorderKeyResultAreas: boolean;
     viewOfficial: boolean;
+    createRemark: boolean;
 };

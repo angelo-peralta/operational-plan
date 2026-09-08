@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -63,5 +64,11 @@ class KeyResultArea extends Model
     public function planItems(): HasMany
     {
         return $this->hasMany(PlanItem::class)->orderBy('sort_order');
+    }
+
+    /** @return MorphMany<Remark, $this> */
+    public function remarks(): MorphMany
+    {
+        return $this->morphMany(Remark::class, 'remarkable');
     }
 }

@@ -1,12 +1,21 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, MessageSquareText, Printer } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { show } from '@/routes/operational-plans';
-import type { KeyResultArea, OperationalPlan, PlanItem } from '@/types';
+import type {
+    ExecutiveRemarkReport,
+    KeyResultArea,
+    OfficialEvaluationResult,
+    OfficialOperationalPlanReport,
+    OperationalPlan,
+    PlanItem,
+} from '@/types';
 
 type Props = {
     institutionName: string;
     operationalPlan: OperationalPlan;
+    report: OfficialOperationalPlanReport;
 };
 
 function accountableLabel(operationalPlan: OperationalPlan): string {
@@ -23,7 +32,7 @@ function accountableLabel(operationalPlan: OperationalPlan): string {
 
 function coAccountableUnits(item: PlanItem): string[] {
     return [
-        ...item.coAccountableDepartments.map(
+        ...item.coAccountableOrganizationalUnits.map(
             (department) => department.code ?? department.name,
         ),
         ...item.manualCoAccountableUnits,
@@ -34,12 +43,22 @@ function OfficialPlanItemRow({
     keyResultArea,
     item,
     itemIndex,
+    result,
 }: {
     keyResultArea: KeyResultArea;
     item: PlanItem;
     itemIndex: number;
+    result: OfficialOperationalPlanReport['itemResults'][number] | undefined;
 }) {
     const units = coAccountableUnits(item);
+    const finalRemarks = [
+        result?.firstSemester?.remarks
+            ? `First Semester: ${result.firstSemester.remarks}`
+            : null,
+        result?.secondSemester?.remarks
+            ? `Second Semester: ${result.secondSemester.remarks}`
+            : null,
+    ].filter((remark): remark is string => remark !== null);
 
     return (
         <tr>
@@ -75,9 +94,70 @@ function OfficialPlanItemRow({
                     '—'
                 )}
             </td>
-            <td className="official-rating-cell">—</td>
-            <td className="official-rating-cell">—</td>
-            <td>—</td>
+            <OfficialRatingCell result={result?.firstSemester ?? null} />
+            <OfficialRatingCell result={result?.secondSemester ?? null} />
+            <td>
+                {finalRemarks.length > 0
+                    ? finalRemarks.map((remark) => <p key={remark}>{remark}</p>)
+                    : '—'}
+            </td>
+        </tr>
+    );
+}
+
+function OfficialRatingCell({
+    result,
+}: {
+    result: OfficialEvaluationResult | null;
+}) {
+    return (
+        <td className="official-rating-cell">
+            {result?.rating === null || result === null ? (
+                '—'
+            ) : (
+                <>
+                    <strong className="text-base">{result.rating}</strong>
+                    <br />
+                    <span className="text-[9px] leading-3">
+                        {result.ratingLabel}
+                    </span>
+                    {result.isPresidential && (
+                        <>
+                            <br />
+                            <span className="text-[9px] leading-3 font-semibold">
+                                President{result.isOverride ? ' override' : ''}
+                            </span>
+                        </>
+                    )}
+                </>
+            )}
+        </td>
+    );
+}
+
+function ExecutiveRemarkRow({ remark }: { remark: ExecutiveRemarkReport }) {
+    return (
+        <tr>
+            <td>
+                {remark.author.name}
+                <br />
+                <span>{remark.author.authority}</span>
+            </td>
+            <td>
+                {remark.keyResultArea
+                    ? [remark.keyResultArea.code, remark.keyResultArea.name]
+                          .filter(Boolean)
+                          .join(' - ')
+                    : 'Operational Plan'}
+            </td>
+            <td>{remark.planItem?.objective ?? '—'}</td>
+            <td>
+                {remark.fieldLabel}
+                <br />
+                {remark.targetLabel}
+            </td>
+            <td>{remark.content}</td>
+            <td>{remark.statusLabel}</td>
         </tr>
     );
 }
@@ -104,13 +184,15 @@ function EmptyKeyResultAreaRow({
 export default function OperationalPlanOfficial({
     institutionName,
     operationalPlan,
+    report,
 }: Props) {
     const { currentTeam } = usePage().props;
+    const [showExecutiveRemarks, setShowExecutiveRemarks] = useState(false);
 
     return (
         <main className="official-plan min-h-screen bg-slate-100 p-4 text-black sm:p-8">
             <Head
-                title={`${operationalPlan.department.code ?? operationalPlan.department.name} Official Operational Plan`}
+                title={`${operationalPlan.organizationalUnit.code ?? operationalPlan.organizationalUnit.name} Official Operational Plan`}
             />
 
             <div className="print-actions mx-auto mb-4 flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
@@ -124,10 +206,23 @@ export default function OperationalPlanOfficial({
                         </Link>
                     </Button>
                 )}
-                <Button onClick={() => window.print()}>
-                    <Printer />
-                    Print
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                            setShowExecutiveRemarks((shown) => !shown)
+                        }
+                    >
+                        <MessageSquareText />
+                        {showExecutiveRemarks ? 'Hide' : 'Include'} executive
+                        remarks
+                    </Button>
+                    <Button onClick={() => window.print()}>
+                        <Printer />
+                        Print / Save as PDF
+                    </Button>
+                </div>
             </div>
 
             <article className="official-plan-sheet mx-auto max-w-[1600px] bg-white p-6 shadow-sm sm:p-10">
@@ -150,9 +245,9 @@ export default function OperationalPlanOfficial({
                     </div>
                     <div className="border-b border-black p-3">
                         <span className="font-bold">Office:</span>{' '}
-                        {operationalPlan.department.name}
-                        {operationalPlan.department.code
-                            ? ` (${operationalPlan.department.code})`
+                        {operationalPlan.organizationalUnit.name}
+                        {operationalPlan.organizationalUnit.code
+                            ? ` (${operationalPlan.organizationalUnit.code})`
                             : ''}
                     </div>
                     <div className="border-b border-black p-3 sm:col-span-2">
@@ -199,6 +294,11 @@ export default function OperationalPlanOfficial({
                                                     }
                                                     item={item}
                                                     itemIndex={itemIndex}
+                                                    result={report.itemResults.find(
+                                                        (itemResult) =>
+                                                            itemResult.planItemId ===
+                                                            item.id,
+                                                    )}
                                                 />
                                             ),
                                         )
@@ -223,12 +323,56 @@ export default function OperationalPlanOfficial({
                 <section className="mt-6 text-xs leading-5">
                     <p className="font-bold">Evaluation Criteria</p>
                     <p>
-                        3 = Exceeded Requirements &nbsp; · &nbsp; 2 = Met
-                        Requirements &nbsp; · &nbsp; 1 = Somehow Met
-                        Requirements &nbsp; · &nbsp; 0 = Did Not Meet
+                        3 = Exceeded Requirements &nbsp; | &nbsp; 2 = Met
+                        Requirements &nbsp; | &nbsp; 1 = Somehow Met
+                        Requirements &nbsp; | &nbsp; 0 = Did Not Meet
                         Requirements
                     </p>
                 </section>
+
+                {showExecutiveRemarks && (
+                    <section className="official-remarks-summary mt-8">
+                        <h2 className="text-sm font-bold tracking-wide uppercase">
+                            Executive Remarks Summary
+                        </h2>
+                        <p className="mt-1 text-xs">
+                            Field-level remarks and their current resolution
+                            status.
+                        </p>
+                        <div className="mt-3 overflow-x-auto">
+                            <table className="official-plan-table w-full min-w-[1000px] border-collapse text-[10px] leading-4">
+                                <thead>
+                                    <tr>
+                                        <th>Author</th>
+                                        <th>Key Result Area</th>
+                                        <th>Plan Item</th>
+                                        <th>Field / Target</th>
+                                        <th>Remark</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {report.executiveRemarks.map((remark) => (
+                                        <ExecutiveRemarkRow
+                                            key={remark.id}
+                                            remark={remark}
+                                        />
+                                    ))}
+                                    {report.executiveRemarks.length === 0 && (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="text-center"
+                                            >
+                                                No executive remarks recorded.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                )}
             </article>
         </main>
     );

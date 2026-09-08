@@ -29,7 +29,7 @@ class ReportingPeriodPolicy
      */
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSystemAdmin();
     }
 
     /**
@@ -37,7 +37,7 @@ class ReportingPeriodPolicy
      */
     public function update(User $user, ReportingPeriod $reportingPeriod): bool
     {
-        return $user->isSuperAdmin()
+        return $user->isSystemAdmin()
             && in_array($reportingPeriod->academicYear->status, [
                 AcademicYearStatus::Draft,
                 AcademicYearStatus::Open,

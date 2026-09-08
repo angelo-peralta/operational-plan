@@ -46,7 +46,7 @@ test('reviewers cannot close approved plans', function () {
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)

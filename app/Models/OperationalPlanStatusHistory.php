@@ -16,6 +16,9 @@ use Illuminate\Support\Carbon;
  * @property int $actor_id
  * @property OperationalPlanStatus|null $from_status
  * @property OperationalPlanStatus $to_status
+ * @property string|null $action
+ * @property string|null $actor_role
+ * @property list<int>|null $actor_organizational_unit_ids
  * @property string|null $remarks
  * @property array<string, mixed>|null $snapshot
  * @property Carbon $created_at
@@ -27,6 +30,9 @@ use Illuminate\Support\Carbon;
     'actor_id',
     'from_status',
     'to_status',
+    'action',
+    'actor_role',
+    'actor_organizational_unit_ids',
     'remarks',
     'snapshot',
     'created_at',
@@ -57,6 +63,7 @@ class OperationalPlanStatusHistory extends Model
             'from_status' => OperationalPlanStatus::class,
             'to_status' => OperationalPlanStatus::class,
             'snapshot' => 'array',
+            'actor_organizational_unit_ids' => 'array',
             'created_at' => 'datetime',
         ];
     }

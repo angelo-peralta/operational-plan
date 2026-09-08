@@ -22,6 +22,15 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    'microsoft' => [
+        'tenant_id' => env('AZURE_AD_TENANT_ID'),
+        'client_id' => env('AZURE_AD_CLIENT_ID'),
+        'client_secret' => env('AZURE_AD_CLIENT_SECRET'),
+        'redirect_uri' => env('AZURE_AD_REDIRECT_URI'),
+        'authority' => env('AZURE_AD_AUTHORITY', 'https://login.microsoftonline.com'),
+        'graph_url' => env('MICROSOFT_GRAPH_URL', 'https://graph.microsoft.com/v1.0'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

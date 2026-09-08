@@ -8,7 +8,7 @@ test('department permissions enforce global and assigned-department access', fun
     $assignedDepartment = Department::factory()->create();
     $otherDepartment = Department::factory()->create();
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($otherDepartment)->create();
     $assignedUser = User::factory()->departmentUser()->forDepartment($assignedDepartment)->create();
     $unassignedUser = User::factory()->create();
 
@@ -32,17 +32,17 @@ test('department permissions enforce global and assigned-department access', fun
         'assignedUser.delete' => Gate::forUser($assignedUser)->allows('delete', $assignedDepartment),
     ])->toBe([
         'administrator.viewAny' => true,
-        'reviewer.viewAny' => true,
+        'reviewer.viewAny' => false,
         'assignedUser.viewAny' => false,
         'administrator.viewOther' => true,
         'reviewer.viewOther' => true,
         'assignedUser.viewOwn' => true,
         'assignedUser.viewOther' => false,
         'unassignedUser.viewAssigned' => false,
-        'administrator.create' => true,
+        'administrator.create' => false,
         'reviewer.create' => false,
         'assignedUser.create' => false,
-        'administrator.update' => true,
+        'administrator.update' => false,
         'reviewer.update' => false,
         'assignedUser.update' => false,
         'administrator.delete' => false,

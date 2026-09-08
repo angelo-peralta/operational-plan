@@ -67,8 +67,10 @@ test('academic year context defaults to the current year and shares authorized u
             ->where('selectedAcademicYear.id', $currentAcademicYear->id)
             ->where('academicYears.0.id', $currentAcademicYear->id)
             ->where('academicYears.1.id', $historicalAcademicYear->id)
-            ->where('auth.user.role', 'department_user')
-            ->where('auth.user.department.id', $departmentUser->department_id)
+            ->where('auth.user.role', 'staff')
+            ->where('auth.user.organizationalAssignments.0.id', $departmentUser->department_id)
+            ->missing('auth.user.department')
+            ->missing('auth.user.roleId')
             ->missing('auth.user.password'),
         );
 });

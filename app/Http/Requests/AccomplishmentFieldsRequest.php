@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Http\UploadedFile;
 
 abstract class AccomplishmentFieldsRequest extends MonitoringRequest
 {
@@ -33,9 +34,13 @@ abstract class AccomplishmentFieldsRequest extends MonitoringRequest
             'department_id' => ['prohibited'],
             'percentage_accomplished' => ['prohibited'],
             'status' => ['prohibited'],
+            'created_by' => ['prohibited'],
+            'updated_by' => ['prohibited'],
             'submitted_by' => ['prohibited'],
             'submitted_at' => ['prohibited'],
             'resubmitted_at' => ['prohibited'],
+            'evidence_files' => ['nullable', 'array', 'max:50'],
+            'evidence_files.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ];
     }
 
@@ -50,6 +55,12 @@ abstract class AccomplishmentFieldsRequest extends MonitoringRequest
                 ? $this->string('accomplishment_text')->toString()
                 : null,
         ];
+    }
+
+    /** @return list<UploadedFile> */
+    public function evidenceFiles(): array
+    {
+        return array_values($this->file('evidence_files', []));
     }
 
     protected function prepareForValidation(): void

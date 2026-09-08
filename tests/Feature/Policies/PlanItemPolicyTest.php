@@ -13,7 +13,7 @@ test('plan item permissions follow the parent operational plan edit boundary', f
     $department = Department::factory()->create();
     $otherDepartment = Department::factory()->create();
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->forDepartment($otherDepartment)->create();
     $draftPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();

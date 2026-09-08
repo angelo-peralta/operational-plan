@@ -28,6 +28,8 @@ class AccomplishmentFactory extends Factory
             'accomplishment_text' => fake()->sentence(),
             'percentage_accomplished' => null,
             'status' => AccomplishmentStatus::Draft,
+            'created_by' => null,
+            'updated_by' => null,
             'submitted_by' => null,
             'submitted_at' => null,
             'resubmitted_at' => null,
@@ -47,6 +49,27 @@ class AccomplishmentFactory extends Factory
     {
         return $this->submitted()->state(fn (array $attributes): array => [
             'status' => AccomplishmentStatus::Returned,
+        ]);
+    }
+
+    public function readyForReview(): static
+    {
+        return $this->submitted()->state(fn (array $attributes): array => [
+            'status' => AccomplishmentStatus::UnderReview,
+        ]);
+    }
+
+    public function accepted(): static
+    {
+        return $this->submitted()->state(fn (array $attributes): array => [
+            'status' => AccomplishmentStatus::Accepted,
+        ]);
+    }
+
+    public function rejected(): static
+    {
+        return $this->submitted()->state(fn (array $attributes): array => [
+            'status' => AccomplishmentStatus::Rejected,
         ]);
     }
 }

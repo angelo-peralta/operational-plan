@@ -4,35 +4,37 @@ namespace App\Enums;
 
 enum UserRole: string
 {
-    case SuperAdmin = 'super_admin';
-    case Reviewer = 'reviewer';
-    case DepartmentUser = 'department_user';
+    case SystemAdmin = 'system_admin';
+    case Executive = 'executive';
+    case OfficeHead = 'office_head';
+    case Staff = 'staff';
 
-    /**
-     * Get the display label for the role.
-     */
     public function label(): string
     {
         return match ($this) {
-            self::SuperAdmin => 'Super Admin',
-            self::Reviewer => 'Reviewer',
-            self::DepartmentUser => 'Department User',
+            self::SystemAdmin => 'System Admin',
+            self::Executive => 'Executive',
+            self::OfficeHead => 'Office Head',
+            self::Staff => 'Secretary / Staff',
         };
     }
 
-    /**
-     * Get the roles formatted for selection controls.
-     *
-     * @return list<array{value: string, label: string}>
-     */
+    public function assignmentType(): ?AssignmentType
+    {
+        return match ($this) {
+            self::SystemAdmin => null,
+            self::Executive => AssignmentType::Executive,
+            self::OfficeHead => AssignmentType::Head,
+            self::Staff => AssignmentType::Staff,
+        };
+    }
+
+    /** @return list<array{value: string, label: string}> */
     public static function options(): array
     {
-        return array_map(
-            static fn (self $role): array => [
-                'value' => $role->value,
-                'label' => $role->label(),
-            ],
-            self::cases(),
-        );
+        return array_map(static fn (self $role): array => [
+            'value' => $role->value,
+            'label' => $role->label(),
+        ], self::cases());
     }
 }

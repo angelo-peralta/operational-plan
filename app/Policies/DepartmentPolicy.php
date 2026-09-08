@@ -2,17 +2,20 @@
 
 namespace App\Policies;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Models\Department;
 use App\Models\User;
 
 class DepartmentPolicy
 {
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     /**
      * Determine whether the user can view any models.
      */
     public function viewAny(User $user): bool
     {
-        return $user->isSuperAdmin() || $user->isReviewer();
+        return $user->isSystemAdmin();
     }
 
     /**
@@ -20,9 +23,7 @@ class DepartmentPolicy
      */
     public function view(User $user, Department $department): bool
     {
-        return $user->isSuperAdmin()
-            || $user->isReviewer()
-            || ($user->isDepartmentUser() && $user->department_id === $department->id);
+        return $this->scope->canViewUnit($user, $department->id);
     }
 
     /**
@@ -30,7 +31,7 @@ class DepartmentPolicy
      */
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return false;
     }
 
     /**
@@ -38,7 +39,7 @@ class DepartmentPolicy
      */
     public function update(User $user, Department $department): bool
     {
-        return $user->isSuperAdmin();
+        return false;
     }
 
     /**

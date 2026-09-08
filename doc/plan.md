@@ -1,32 +1,68 @@
-# Operational Plan System — MVP Master Implementation Prompt
+# REVISED — Operational Plan System MVP Master Implementation Prompt
+
+> **REVISED PLAN**
+>
+> This implementation plan supersedes the previous MVP plan.
+>
+> Major revisions:
+>
+> * AI analysis is removed from the MVP.
+> * Ollama and `laravel/ai` are not part of the current MVP workflow.
+> * Evidence review and evaluation are fully manual.
+> * `departments` are generalized into hierarchical `organizational_units`.
+> * The University President and Vice Presidents use the same `executive` system role.
+> * Every assigned Executive has university-wide read visibility without separate hardcoded President/VP roles.
+> * The University President has university-wide executive review and override authority.
+> * A Vice President has executive authority over the organizational units under their area.
+> * VP Academic can immediately evaluate Operational Plans/accomplishments belonging to schools/offices under Academic Affairs.
+> * The University President can subsequently review and override a VP evaluation.
+> * Previous VP evaluations must remain in history after a Presidential override.
+> * Remarks/comments may be attached to individual sections and fields of an Operational Plan, not only to the whole plan.
+> * Remarks from executives must be summarized into an Operational Plan Review Summary.
+> * `Department User` is replaced by `Secretary / Staff`.
+> * Planning Reviewer, Program Head, and separate Unit User roles are removed from the MVP.
+> * Only offices that actually participate in the system should be created/enabled. Do not assume that every administrator listed in the university directory requires an account.
+>
+> Keep the application as a modular Laravel monolith.
+
+---
+
+# 1. Project Objective
 
 You are working inside an existing Laravel application.
 
-Your task is to build the MVP of an **Operational Plan Management, Monitoring, Evaluation, Evidence Validation, and Reporting System** based on the institution's actual Operational Plan format.
+Build the MVP of an:
+
+**Operational Plan Management, Monitoring, Manual Evaluation, Evidence Management, Executive Review, Remarks, and Reporting System**
+
+based on the institution's actual Operational Plan format.
 
 Do not recreate the Laravel project from scratch.
 
-Before writing code, inspect:
+Before modifying code, inspect:
 
 * installed Laravel version
 * PHP version
 * React starter kit structure
+* React version
 * Inertia version
 * TypeScript configuration
-* Tailwind / shadcn components
+* Tailwind configuration
+* shadcn/ui components
 * PostgreSQL configuration
-* Laravel AI package/version
-* queue configuration
 * authentication implementation
 * existing migrations
 * existing models
 * existing routes
+* existing authorization implementation
+* existing test framework
+* existing queue configuration only for awareness
 
-Use the APIs and conventions that actually exist in the installed package versions.
+Use the APIs and conventions that actually exist in the installed versions.
 
 ---
 
-# 1. Technology Stack
+# 2. Technology Stack — Revised
 
 Use the existing stack:
 
@@ -36,39 +72,54 @@ Use the existing stack:
 * TypeScript
 * Inertia.js
 * Tailwind CSS
-* shadcn/ui components included by the starter kit
+* shadcn/ui
 * PostgreSQL
 * Laravel authentication
 * Laravel Policies / Gates
 * Laravel Form Requests
-* Laravel Queue
-* Database queue for MVP
 * Laravel Storage
-* `laravel/ai`
-* Ollama for local AI development
-* Local model: `qwen3-vl:4b-instruct`
 * Pest or the testing framework already installed
+
+For the current revised MVP:
+
+**Do not implement AI functionality.**
+
+Do not build:
+
+* AI evidence analysis
+* Ollama integration
+* AI agents
+* AI structured outputs
+* AI queues
+* OCR services
+* Python services
+
+If `laravel/ai` already exists in the project, do not necessarily uninstall it unless removal is clearly safe and necessary.
+
+Simply do not make it part of the current MVP workflow.
 
 Do not introduce:
 
 * Next.js
-* a separate React application
+* separate React application
 * Python
 * FastAPI
 * MongoDB
 * Kubernetes
 * RabbitMQ
 * microservices
-* a separate authentication system
-* a separate AI application
+* separate authentication
+* separate evidence-review service
 
-Keep the MVP as a **modular Laravel monolith**.
+Keep the system a:
+
+**modular Laravel monolith**
 
 ---
 
-# 2. Core System Principle: Academic Year Is the Root Context
+# 3. Core Principle — Academic Year Is the Root Context
 
-The entire operational planning system must be organized by **Academic Year**.
+The entire system is organized under an Academic Year.
 
 Examples:
 
@@ -76,44 +127,48 @@ Examples:
 * AY 2026–2027
 * AY 2027–2028
 
-An Academic Year is not simply a text field on a report.
-
-It is a first-class database entity and the main context used throughout the application.
-
-The user must be able to select an Academic Year from the interface.
-
-After selecting an Academic Year:
-
-* dashboard statistics must show only data from that academic year
-* departments' operational plans must show only data from that academic year
-* accomplishments must belong to that academic year through their operational plan
-* evidence must belong to accomplishments within that academic year
-* evaluations must belong to reporting periods within that academic year
-* monitoring screens must filter by that academic year
-* reports must filter by that academic year
-* exports must contain only records from that academic year
-
-Never mix records from different academic years in an annual Operational Plan export.
-
-Use the Academic Year as the main planning container.
+Academic Year is a first-class database entity.
 
 Conceptually:
 
 Academic Year
-→ Departments
+→ Organizational Units
 → Operational Plans
 → Key Result Areas
 → Plan Items
-→ Semester Accomplishments
+→ Reporting Periods
+→ Accomplishments
 → Evidence
-→ AI Analysis
-→ Human Evaluation
+→ Executive Evaluation
+→ Remarks
+→ Reports
+
+The user selects an Academic Year from the application interface.
+
+After selection:
+
+* dashboards use only that Academic Year
+* Operational Plans use only that Academic Year
+* accomplishments use only that Academic Year
+* evaluations use only that Academic Year
+* evidence belongs only to accomplishments within that Academic Year
+* remarks are shown within that Academic Year context
+* reports are filtered by that Academic Year
+* exports contain only that Academic Year's records
+
+Academic Years must never be mixed in annual reports or exports.
+
+Server-side filtering is mandatory.
+
+Do not rely solely on React filtering.
 
 ---
 
-# 3. Academic Year Model
+# 4. Academic Years
 
-Create an `academic_years` table.
+Create:
+
+`academic_years`
 
 Suggested fields:
 
@@ -127,17 +182,6 @@ Suggested fields:
 * is_current boolean
 * timestamps
 
-Example:
-
-name:
-`AY 2025-2026`
-
-start_year:
-`2025`
-
-end_year:
-`2026`
-
 Statuses:
 
 * draft
@@ -147,32 +191,27 @@ Statuses:
 
 Rules:
 
-* only authorized administrators may create academic years
-* there should normally be only one current academic year
-* closing an academic year should prevent ordinary department users from modifying plans/accomplishments in that year
-* historical academic years must remain viewable
-* do not delete historical academic years that already contain planning data
-
-Create an Academic Year selector in the application layout.
-
-The selected academic year should persist while navigating the system.
-
-Routes, query parameters, session state, or another clean Laravel/Inertia approach may be used, but authorization and database filtering must happen server-side.
-
-Do not rely only on frontend filtering.
+* System Admin manages Academic Years.
+* Normally only one Academic Year is current.
+* Closed years are read-only for ordinary users.
+* Historical years remain viewable.
+* Historical years containing planning records must not be deleted.
+* Academic Year context persists while navigating the application.
 
 ---
 
-# 4. Reporting Periods
+# 5. Reporting Periods
 
-Each Academic Year should contain reporting periods.
+Each Academic Year contains reporting periods.
 
-For the current institutional format, seed:
+For the MVP seed:
 
 * First Semester
 * Second Semester
 
-Create a `reporting_periods` table.
+Create:
+
+`reporting_periods`
 
 Suggested fields:
 
@@ -186,37 +225,523 @@ Suggested fields:
 * status
 * timestamps
 
-Example:
+Example codes:
 
-First Semester:
 `first_semester`
 
-Second Semester:
 `second_semester`
 
-This is preferable to hardcoding `first_semester_rating` and `second_semester_rating` columns everywhere.
+Do not hardcode semester ratings as permanent columns throughout the database.
 
-The export can still display the official columns:
-
-* First Semester
-* Second Semester
-
-but internally evaluations should be normalized by reporting period.
+Evaluations belong to reporting periods.
 
 ---
 
-# 5. Institutional Operational Plan Format
+# 6. Revised Organizational Structure
 
-The system must preserve all major fields appearing in the institution's existing Operational Plan form.
+Replace the narrow `departments` concept with:
 
-The plan header contains:
+`organizational_units`
+
+This represents any organizational entity participating in Operational Planning.
+
+Possible unit types:
+
+* university
+* executive_office
+* vice_presidential_area
+* school
+* college
+* center
+* office
+* department
+* unit
+* other
+
+Suggested fields:
+
+* id
+* parent_id nullable
+* name
+* code nullable
+* acronym nullable
+* type
+* description nullable
+* is_active boolean
+* sort_order nullable
+* timestamps
+
+Use a hierarchical parent-child structure.
+
+Example:
+
+St. Paul University Philippines
+│
+├── Office of the President
+│
+├── Academic Affairs
+│   │
+│   ├── Graduate School
+│   ├── School of Medicine
+│   ├── School of Arts, Sciences and Teacher Education
+│   ├── School of Business, Accountancy and Hospitality Management
+│   ├── School of Information Technology and Engineering
+│   ├── School of Nursing and Allied Health Sciences
+│   └── Basic Education Unit
+│
+├── Finance
+├── Administrative and General Services
+├── CPRINT
+├── ICT
+└── other participating offices
+
+Do not assume this list is final.
+
+The administrator must be able to configure participating organizational units.
+
+Only important offices that actually use the system should be activated.
+
+Do not automatically create system accounts for every administrator appearing in the university directory.
+
+---
+
+# 7. Organizational Assignments
+
+Do not restrict a user to one hardcoded `department_id`.
+
+Create a relationship such as:
+
+`organizational_unit_user_assignments`
+
+Suggested fields:
+
+* id
+* user_id
+* organizational_unit_id
+* assignment_type
+* position_title nullable
+* is_primary boolean
+* starts_on nullable
+* ends_on nullable
+* is_active boolean
+* timestamps
+
+Possible assignment types:
+
+* executive
+* head
+* staff
+
+This allows one person to have legitimate assignments involving more than one organizational unit if required.
+
+Authorization must consider:
+
+1. application role
+2. organizational assignment
+3. organizational hierarchy
+4. Academic Year
+5. record status
+
+---
+
+# 8. Revised MVP Roles
+
+Use only four main application roles for the MVP:
+
+* `system_admin`
+* `executive`
+* `office_head`
+* `staff`
+
+Do not create separate roles for:
+
+* President
+* VP Academic
+* VP Finance
+* Reviewer
+* Planning Office
+* Program Head
+* Department User
+* Unit User
+
+President and Vice Presidents use the same:
+
+`executive`
+
+role.
+
+Their difference comes from organizational scope.
+
+---
+
+# 9. System Admin
+
+System Admin is a technical/administrative role.
+
+Can:
+
+* manage Academic Years
+* manage reporting periods
+* manage organizational units
+* manage users
+* assign users to organizational units
+* manage user roles
+* configure organizational hierarchy
+* view records for administrative support
+* reopen records when authorized
+* access system-level reports
+* correct configuration errors when administratively necessary
+
+System Admin does not automatically become an Operational Plan evaluator simply because they administer the software.
+
+Do not mix system administration authority with academic/executive evaluation authority.
+
+---
+
+# 10. Executive Role
+
+Both the:
+
+* University President
+* Vice Presidents
+
+use the same:
+
+`executive`
+
+role.
+
+Executives can:
+
+* create their own unit's Operational Plan
+* review subordinate Operational Plans
+* approve subordinate Operational Plans
+* return subordinate plans for revision
+* view accomplishments university-wide
+* view uploaded evidence university-wide
+* manually evaluate accomplishments
+* assign official 0–3 ratings
+* add remarks
+* add field-level remarks
+* request corrections/additional evidence
+* access reports university-wide
+* export Operational Plans university-wide
+
+The President and Vice Presidents have the same university-wide read visibility. Organizational scope still determines where an Executive may author, approve, return, evaluate, or resolve remarks.
+
+---
+
+# 11. University President Scope
+
+The University President is an Executive assigned to the top/root executive organizational unit.
+
+The President can:
+
+* see Operational Plans university-wide
+* see subordinate executive areas
+* see schools/offices beneath Vice Presidents
+* evaluate Operational Plans/accomplishments throughout the university
+* review existing VP evaluations
+* add additional remarks
+* override a VP's evaluation when necessary
+* provide the effective/final executive evaluation when an override is issued
+
+The President should not require a different application role from the VP.
+
+Presidential review and override authority must come from the university-root organizational assignment.
+
+---
+
+# 12. Vice President Scope
+
+Example:
+
+VP Academic is:
+
+`role = executive`
+
+assigned to:
+
+`Academic Affairs`
+
+The VP Academic has university-wide read visibility over all participating organizational units. The Academic Affairs assignment determines the branch where the VP may approve, return, evaluate, and resolve remarks.
+
+For example:
+
+Academic Affairs
+│
+├── Graduate School
+├── School of Medicine
+├── SASTE
+├── SBAHM
+├── SITE
+├── SNAHS
+└── Basic Education Unit
+
+The VP Academic can:
+
+* see all university Operational Plans, schools, departments, offices, and evidence
+* review plans within Academic Affairs
+* approve or return them
+* see semester accomplishments
+* view evidence
+* evaluate accomplishments immediately
+* assign official ratings
+* add remarks at any relevant part of the OP
+
+Every assigned Vice President may view unrelated areas. They must not approve, return, evaluate, or resolve Executive remarks outside their assigned organizational authority.
+
+---
+
+# 13. Office Head
+
+`office_head`
+
+represents the accountable leader of a participating organizational unit.
+
+Examples may include:
+
+* Dean
+* Director
+* Department Head
+* Office Head
+* Center Director
+* Principal
+* other accountable heads
+
+Office Heads can:
+
+* view their own organizational unit
+* create their unit's Operational Plan
+* edit draft plans
+* create KRAs
+* create Plan Items
+* edit planning fields before approval
+* review work prepared by their Secretary/Staff
+* submit their OP
+* report accomplishments
+* upload evidence
+* view executive remarks
+* respond to returned plans
+* respond to requests for corrections/additional evidence
+* view ratings and evaluation history
+* export their own Operational Plan where permitted
+
+Office Heads cannot:
+
+* approve their own OP
+* assign executive ratings to their own accomplishments
+* override an Executive evaluation
+* view private records belonging to unrelated organizational units
+
+---
+
+# 14. Secretary / Staff
+
+Replace the previous `Department User` concept with:
+
+`staff`
+
+This role represents:
+
+* Secretary
+* Executive Secretary
+* Administrative Assistant
+* designated encoder
+* designated office staff
+
+Staff are assigned to an organizational unit.
+
+Staff can:
+
+* prepare draft Operational Plans
+* encode Accountable information
+* encode Goal
+* create KRAs
+* create Plan Items
+* edit draft data
+* encode semester accomplishments
+* upload evidence
+* view remarks
+* make revisions requested by their Office Head or Executive
+* assist with record preparation
+
+Staff should normally not:
+
+* give final OP approval
+* assign official evaluation ratings
+* override evaluations
+* approve their own office's OP
+* access unrelated organizational units
+* submit the final OP unless explicitly authorized by a future permission setting
+
+For the MVP:
+
+**Final Operational Plan submission should normally be performed by the Office Head.**
+
+---
+
+# 15. Same Role, Different Executive Authority
+
+Do not hardcode separate permission logic like:
+
+`if user is VP Academic`
+
+where organizational hierarchy can determine authority instead.
+
+Example:
+
+VP Academic:
+
+Role:
+`executive`
+
+Assignment:
+`Academic Affairs`
+
+President:
+
+Role:
+`executive`
+
+Assignment:
+`Office of the President / university root`
+
+The role determines:
+
+**what the user can do.**
+
+The organizational assignment determines:
+
+**where the user can perform executive mutations and evaluations.**
+
+All assigned Executives receive university-wide read visibility.
+
+The hierarchy determines:
+
+**whose records the user can approve/evaluate.**
+
+---
+
+# 16. Operational Plan
+
+Create:
+
+`operational_plans`
+
+Suggested fields:
+
+* id
+* academic_year_id
+* organizational_unit_id
+* accountable_user_id nullable
+* accountable_name nullable
+* accountable_position nullable
+* goal text
+* status
+* created_by
+* submitted_by nullable
+* submitted_at nullable
+* approved_at nullable
+* approved_by nullable
+* returned_at nullable
+* closed_at nullable
+* timestamps
+
+Statuses:
+
+* draft
+* submitted
+* returned
+* approved
+* closed
+
+Database constraint:
+
+Normally one Operational Plan per:
+
+`academic_year_id + organizational_unit_id`
+
+Do not silently create duplicate annual OPs for the same organizational unit.
+
+---
+
+# 17. Approval Authority
+
+Operational Plan approval follows the organizational hierarchy.
+
+Example:
+
+SITE
+→ parent = Academic Affairs
+→ executive = VP Academic
+
+Therefore:
+
+SITE Operational Plan
+→ submitted by SITE Office Head
+→ reviewed by VP Academic
+→ approved/returned by VP Academic
+
+For VP Academic's own OP:
+
+Academic Affairs
+→ parent executive authority = University President
+
+Therefore:
+
+VP Academic OP
+→ submitted
+→ reviewed by University President
+→ approved/returned by University President
+
+An Executive must not approve their own Operational Plan.
+
+Never allow self-approval.
+
+---
+
+# 18. Plan Approval History
+
+Do not rely only on `approved_by` on the Operational Plan.
+
+Preserve review history using a table such as:
+
+`operational_plan_reviews`
+
+Suggested fields:
+
+* id
+* operational_plan_id
+* reviewer_id
+* action
+* remarks nullable
+* reviewed_at
+* timestamps
+
+Actions:
+
+* submitted
+* approved
+* returned
+* reopened
+
+This creates an auditable plan approval history.
+
+---
+
+# 19. Institutional Operational Plan Format
+
+Preserve the institution's official fields.
+
+Plan header:
 
 * Academic Year
 * Office
 * Accountable
 * Goal
 
-The operational plan table contains:
+Operational Plan table:
 
 * Key Result Area
 * Objectives
@@ -231,176 +756,42 @@ The operational plan table contains:
   * Second Semester
 * Remarks
 
-The evaluation criteria are:
+Evaluation criteria:
 
 * 3 = Exceeded Requirements
 * 2 = Met Requirements
 * 1 = Somehow Met Requirements
 * 0 = Did Not Meet Requirements
 
-These fields must be represented in the database and in the export.
-
 ---
 
-# 6. Departments / Offices
+# 20. Key Result Areas
 
-Create a `departments` table.
+System Admin manages one global KRA template catalog. These templates are the institutional defaults used by every school, department, office, center, and other organizational unit.
 
-The term Department represents an office/unit participating in operational planning.
+Create:
+
+`key_result_area_templates`
 
 Suggested fields:
 
 * id
+* code nullable
 * name
-* code
 * description nullable
-* is_active boolean
+* sort_order
+* is_active
+* created_by nullable
+* updated_by nullable
 * timestamps
 
-Examples may include:
+Only System Admin may create, update, activate/deactivate, reorder, or delete global KRA templates. This catalog is not scoped to an Academic Year or organizational unit.
 
-* Center for Planning, Research, Innovations, and New Technologies
-* Information and Communications Technology
-* Quality Assurance
-* Human Resources
-* Finance
-* Planning Office
+When an Operational Plan is created, copy every active global template into plan-owned `key_result_areas` rows in template order. The copied rows are snapshots. Later template changes apply only to future Operational Plans and must never rewrite an existing plan, approval snapshot, remark target, or evaluation history.
 
-Relationships:
+Create:
 
-Department has many Users.
-
-Department has many Operational Plans across different Academic Years.
-
----
-
-# 7. Users and Roles
-
-Use the existing starter-kit User model.
-
-Add:
-
-* department_id nullable
-* role
-
-MVP roles:
-
-## Super Admin
-
-Can:
-
-* manage Academic Years
-* manage reporting periods
-* manage departments
-* manage users
-* view all plans
-* view all accomplishments
-* view all evidence
-* review evidence
-* perform evaluations
-* access all reports
-* export plans
-* reopen records when administratively necessary
-
-## Reviewer / Planning Office
-
-Can:
-
-* view plans across departments
-* review submitted plans
-* monitor accomplishments
-* review evidence
-* view AI analysis
-* assign official evaluation ratings
-* enter remarks
-* request additional evidence
-* reject unsupported submissions
-* access monitoring reports
-* export operational plans
-
-## Department User
-
-Belongs to one department.
-
-Can:
-
-* access their department
-* create/edit their department's plan for an open Academic Year
-* create KRAs and Plan Items where allowed
-* submit the plan
-* report semester accomplishments
-* upload documentary evidence
-* submit accomplishments
-* view AI analysis where permitted
-* view reviewer feedback
-* submit additional evidence when requested
-
-Department users must never gain access to another department's private records by modifying a URL or request parameter.
-
-Enforce authorization on the Laravel backend.
-
----
-
-# 8. Operational Plan
-
-Create an `operational_plans` table.
-
-Suggested fields:
-
-* id
-* academic_year_id
-* department_id
-* accountable_user_id nullable
-* accountable_name nullable
-* accountable_position nullable
-* goal text
-* status
-* submitted_at nullable
-* approved_at nullable
-* approved_by nullable
-* returned_at nullable
-* timestamps
-
-Statuses:
-
-* draft
-* submitted
-* approved
-* returned
-* closed
-
-Important constraint:
-
-A department should normally have only one Operational Plan for a particular Academic Year.
-
-Add a database-level uniqueness constraint where appropriate:
-
-`academic_year_id + department_id`
-
-Example:
-
-Academic Year:
-AY 2025–2026
-
-Office:
-Center for Planning, Research, Innovations, and New Technologies
-
-Acronym:
-CPRINT
-
-The `acronym` field is optional and may be left blank when the office or department does not have an acronym.
-
-Accountable:
-CPRINT Director
-
-Goal:
-To ensure the full integration of ethical AI and digital technologies in teaching, learning, research, and administrative processes through adoption, capacity building, monitoring, and efficient, timely, and high-quality reporting systems.
-
----
-
-# 9. Key Result Areas
-
-Create a `key_result_areas` table.
+`key_result_areas`
 
 Suggested fields:
 
@@ -410,35 +801,23 @@ Suggested fields:
 * name
 * description nullable
 * sort_order
+* created_by nullable
+* updated_by nullable
 * timestamps
 
-Example:
+KRAs maintain manual ordering.
 
-Code:
-KRA 1
+Never rely on database IDs for display order.
 
-Name:
-Quality Teaching, Learning, and Student Services
-
-Relationship:
-
-Operational Plan has many Key Result Areas.
-
-Key Result Area has many Plan Items.
-
-KRAs should maintain manual ordering.
-
-Do not rely on database IDs for display order.
+Plan-owned KRAs remain editable while the Operational Plan workflow permits editing. Editing a plan-owned KRA does not change the global template.
 
 ---
 
-# 10. Plan Items
+# 21. Plan Items
 
-Replace the previous generic `Activity` concept with a `PlanItem`.
+Create:
 
-A Plan Item represents one operational-plan row or logical planning entry underneath a Key Result Area.
-
-Create `plan_items`.
+`plan_items`
 
 Suggested fields:
 
@@ -455,47 +834,15 @@ Suggested fields:
 * documentary_evidence_requirements jsonb nullable
 * sort_order
 * status
+* created_by nullable
+* updated_by nullable
 * timestamps
 
-The textual KPI/Target field is authoritative because institutional targets may be complex.
+`kpi_target_text` remains authoritative.
 
-Examples:
+Do not assume every KPI can be represented numerically.
 
-`Institutional research-based AI guidelines are developed and approved`
-
-`At least 1 monitoring/evaluation study conducted per year on AI use in instruction`
-
-`80% of programs evaluated using AI integration research-based tools`
-
-`100% of researchers trained on AI tools for research`
-
-`At least 2 AI-in-research capability workshops are conducted per year`
-
-`At least 70–80% of research outputs demonstrate use of AI tools`
-
-`At least 1 research study on AI applications in research processes completed per year`
-
-`100% of required reports submitted on or before the specified due date`
-
-`0% delayed submissions across all research projects`
-
-Do not assume all KPIs can be represented by one numeric value.
-
-Keep:
-
-`kpi_target_text`
-
-for the official wording.
-
-Structured fields such as:
-
-* target_value
-* target_unit
-* target_operator
-
-may be populated when useful for automated calculations.
-
-Examples of target operators:
+Optional structured operators:
 
 * equals
 * at_least
@@ -507,109 +854,72 @@ Examples of target operators:
 
 ---
 
-# 11. Unit Co-Accountable
+# 22. Unit Co-Accountable
 
-The existing form includes `Unit Co-Accountable`.
+A Plan Item may have multiple co-accountable organizational units.
 
-A Plan Item may have multiple co-accountable units.
-
-Examples:
-
-* VPA
-* ICT
-* QA
-* CEARA
-* VPA
-* HR
-
-Prefer a many-to-many relationship between Plan Items and Departments/Organizational Units where possible.
-
-Create a pivot such as:
+Create:
 
 `plan_item_co_accountables`
 
-Fields:
+Suggested fields:
 
 * plan_item_id
-* department_id
+* organizational_unit_id
 
-If the institution needs to reference a unit that does not yet exist in the Departments table, allow a temporary/manual text representation only if necessary.
+Prefer linked organizational records rather than comma-separated text.
 
-Prefer linked records over comma-separated strings.
-
----
-
-# 12. Resources Needed
-
-The official plan includes `Resources Needed`.
-
-Store this on the Plan Item.
-
-Examples:
-
-* AI Policy Development and Research Team
-* Digital Tools and Platforms for AI Monitoring and Evaluation
-* Training and Capability-Building Resources
-* AI Tools and Software Subscriptions for Research
-* Qualified Trainers and Resource Persons
-* Training and Implementation Support Materials
-* Centralized Research Monitoring System / Dashboard
-* Research Monitoring Personnel / System Administrator
-* Standardized Reporting and Monitoring Tools
-
-For the MVP this may remain structured as text.
+A manual-text fallback may be allowed only when a referenced unit does not exist in the organizational structure.
 
 ---
 
-# 13. Documentary Evidence Requirements
+# 23. Resources Needed
 
-The existing Operational Plan includes a column called:
+Store:
 
-`Documentary Evidence`
+`resources_needed`
 
-This describes what evidence should exist when an accomplishment is reported.
+on the Plan Item.
+
+For the MVP it may remain text.
+
+---
+
+# 24. Documentary Evidence Requirements
+
+The Plan Item identifies expected documentary evidence.
 
 Examples:
 
-* Approved AI Guidelines and Policy Documents
-* Monitoring and Evaluation Reports on AI Use
-* Program Evaluation Records and Tools
-* Training Records and Certificates
-* Research Outputs Demonstrating AI Utilization
-* Completed Research Study on AI in Research Processes
-* System Screenshots and Dashboard Reports
-* Research Tracking Database / Monitoring Logs
-* Submission Records and Reports
+* Approved Policy Documents
+* Monitoring Reports
+* Program Evaluation Records
+* Training Records
+* Certificates
+* Research Outputs
+* Screenshots
+* Monitoring Logs
+* Submission Records
 * Compliance Reports
 
-Store expected evidence as a structured array where possible.
+Store as structured JSON where practical.
 
 Example:
 
-```json
 [
-  "Training Records",
-  "Certificates"
+"Training Records",
+"Certificates"
 ]
-```
 
-Do not confuse:
-
-`Documentary Evidence Requirements`
-
-with:
-
-`Actual Evidence Files`
-
-The requirement comes from the Operational Plan.
-
-The actual evidence is uploaded later during accomplishment reporting.
+Expected documentary evidence is different from actual uploaded evidence.
 
 ---
 
-# 14. Semester Accomplishments
+# 25. Semester Accomplishments
 
-Create an `accomplishments` table.
+Create:
+
+`accomplishments`
 
 Suggested fields:
 
@@ -620,7 +930,8 @@ Suggested fields:
 * accomplishment_text text nullable
 * percentage_accomplished nullable
 * status
-* submitted_by
+* created_by
+* submitted_by nullable
 * submitted_at nullable
 * resubmitted_at nullable
 * timestamps
@@ -629,52 +940,46 @@ Statuses:
 
 * draft
 * submitted
+* under_review
+* returned
+* accepted
+* rejected
+
+Remove AI-specific statuses such as:
+
 * queued_for_analysis
 * analyzing
 * ready_for_review
-* accepted
-* returned
-* rejected
 
-Unique constraint:
+One current accomplishment should normally exist per:
 
-A Plan Item should normally have only one current accomplishment record per reporting period.
+`plan_item_id + reporting_period_id`
 
-If historical revisions are required, preserve revision history rather than destructively overwriting data.
+Preserve revision history where required.
 
 ---
 
-# 15. Accomplishment Percentage
+# 26. Accomplishment Percentage
 
-Where both the target and accomplishment are truly numeric:
+Where the KPI is truly numeric:
 
 `reported value / target value × 100`
 
-Calculate the value in the system.
+Calculate this in the system.
 
-Do not allow division by zero.
+Do not divide by zero.
 
-Do not force percentage calculations onto qualitative targets.
+Do not force numeric calculations onto qualitative KPIs.
 
-For targets such as:
-
-`Institutional AI guidelines developed and approved`
-
-use qualitative evaluation.
-
-For targets such as:
-
-`At least 2 workshops`
-
-structured numeric comparison can be used.
-
-Do not allow a manually entered percentage to override a system-calculable percentage without authorization.
+Do not allow arbitrary manual percentage overrides where the percentage can be calculated reliably, unless an authorized workflow is explicitly introduced later.
 
 ---
 
-# 16. Actual Evidence Uploads
+# 27. Actual Evidence Uploads
 
-Create an `evidence` table.
+Create:
+
+`evidence`
 
 Suggested fields:
 
@@ -698,323 +1003,71 @@ MVP file types:
 * JPEG
 * PNG
 
-Use reasonable upload-size limits.
-
 Use Laravel Storage.
 
-Do not store file binary data directly inside PostgreSQL.
+Evidence must be private.
 
-Evidence files must be private.
+Do not expose predictable public file URLs.
 
-Do not expose predictable public URLs.
+Provide authorized controller routes for:
 
-Use authorized controller routes for:
+* view
+* download
 
-* viewing
-* downloading
-
-Only authorized users should be able to access evidence.
+Access must be checked server-side.
 
 ---
 
-# 17. AI Evidence Analysis
+# 28. Manual Evidence Review
 
-Use the installed official `laravel/ai` package.
+All evidence review is manual for the revised MVP.
 
-Create an AI agent:
+No AI analysis occurs after accomplishment submission.
 
-`EvidenceAnalyzer`
+Workflow:
 
-Local development provider:
+Office Head / Staff
+→ enters accomplishment
+→ uploads evidence
+→ Office Head submits
+→ accomplishment status = submitted / under_review
+→ authorized Executive reviews accomplishment and evidence
+→ Executive evaluates
+→ Executive accepts, returns, or rejects
 
-Ollama
+The system must display enough context for the Executive to manually assess:
 
-Model:
-
-`qwen3-vl:4b-instruct`
-
-Provider/model/base URL must come from configuration/environment variables.
-
-Do not hardcode API settings in application code.
-
----
-
-# 18. Purpose of the AI
-
-The AI does not evaluate the department politically or administratively.
-
-Its job is narrowly defined:
-
-Determine whether the uploaded evidence sufficiently supports the reported accomplishment in relation to:
-
+* Academic Year
+* Reporting Period
+* Organizational Unit
+* KRA
 * Objective
 * Strategy
 * KPI / Target
 * Documentary Evidence Requirements
-* Reporting Period
-* Department's reported accomplishment
-
-Evaluate:
-
-## Relevance
-
-Does the evidence actually relate to the Plan Item?
-
-## Completeness
-
-Are the expected documentary evidence requirements present?
-
-## Consistency
-
-Does the evidence agree with what the department reported?
-
-## Quantity Support
-
-If the claim says:
-
-`2 workshops completed`
-
-does the available evidence appear to support two distinct workshops?
-
-## Date / Period Consistency
-
-Does the evidence appear to belong to the selected Academic Year and reporting period?
-
-## Documentary Requirement Match
-
-Example:
-
-Expected:
-Training Records and Certificates
-
-Uploaded:
-one unrelated memorandum
-
-This should not be considered sufficient.
-
-## Missing Evidence
-
-Clearly identify missing requirements.
-
-## Uncertainty
-
-If the model cannot reliably establish something, it must say so.
-
-Never invent evidence.
-
-Never claim that a signature, date, event, participant, document, or accomplishment was found when it was not actually identifiable.
+* Reported Accomplishment
+* Uploaded Evidence
 
 ---
 
-# 19. Evidence Sufficiency Is Different From Official Performance Rating
+# 29. Executive Evaluation
 
-Keep these as two separate concepts.
+Create:
 
-## AI Evidence Sufficiency
-
-Question:
-
-Does the uploaded evidence support the claimed accomplishment?
-
-Possible statuses:
-
-* sufficient
-* partially_sufficient
-* insufficient
-* uncertain
-
-## Official Evaluation Rating
-
-Question:
-
-How well did the unit meet the operational-plan requirement?
-
-Official institutional scale:
-
-* 3 = Exceeded Requirements
-* 2 = Met Requirements
-* 1 = Somehow Met Requirements
-* 0 = Did Not Meet Requirements
-
-AI may provide factual analysis that assists a reviewer, but AI must not be the final authority for the official rating.
-
-The human reviewer assigns the official rating.
-
----
-
-# 20. AI Structured Output
-
-Use structured output.
-
-Target schema:
-
-```json
-{
-  "status": "partially_sufficient",
-  "score": 78,
-  "confidence": 84,
-  "reported_accomplishment": "2 workshops completed",
-  "supported_accomplishment": "Evidence clearly supports 1 workshop and partially supports a second workshop.",
-  "findings": [
-    {
-      "requirement": "Training Records",
-      "status": "complete",
-      "explanation": "Training records were identified for the submitted activity."
-    },
-    {
-      "requirement": "Certificates",
-      "status": "partial",
-      "explanation": "Certificates were identified for only part of the reported accomplishment."
-    }
-  ],
-  "missing_evidence": [
-    "Complete certificate records supporting the second workshop"
-  ],
-  "period_consistency": "consistent",
-  "recommendation": "request_additional_evidence",
-  "summary": "The available documentation partially supports the reported accomplishment."
-}
-```
-
-Allowed overall statuses:
-
-* sufficient
-* partially_sufficient
-* insufficient
-* uncertain
-
-Requirement statuses:
-
-* complete
-* partial
-* missing
-* uncertain
-
-Recommendations:
-
-* likely_sufficient
-* request_additional_evidence
-* manual_review
-
-Period consistency:
-
-* consistent
-* inconsistent
-* uncertain
-
-Score:
-
-0–100
-
-Confidence:
-
-0–100
-
-Validate structured output before saving.
-
-Do not blindly trust model output.
-
----
-
-# 21. Evidence Analysis Storage
-
-Create `evidence_analyses`.
+`evaluations`
 
 Suggested fields:
 
 * id
 * accomplishment_id
-* provider
-* model
-* prompt_version
-* status
-* score nullable
-* confidence nullable
-* sufficiency_status nullable
-* supported_accomplishment text nullable
-* findings jsonb nullable
-* missing_evidence jsonb nullable
-* period_consistency nullable
-* recommendation nullable
-* summary nullable
-* raw_response jsonb/text nullable
-* error_message nullable
-* started_at nullable
-* completed_at nullable
-* timestamps
-
-Statuses:
-
-* queued
-* analyzing
-* completed
-* failed
-
-Preserve previous analyses after resubmission.
-
-Never overwrite the audit history.
-
----
-
-# 22. Queue AI Analysis
-
-AI analysis must happen asynchronously.
-
-Create a queued job such as:
-
-`AnalyzeEvidence`
-
-Workflow:
-
-Department submits accomplishment
-→ EvidenceAnalysis record created
-→ status = queued
-→ AnalyzeEvidence dispatched
-→ status = analyzing
-→ Laravel AI calls Ollama
-→ response validated
-→ EvidenceAnalysis updated
-→ status = completed
-→ accomplishment becomes ready_for_review
-
-On failure:
-
-→ analysis status = failed
-→ save safe error information
-→ accomplishment remains reviewable
-→ human review remains possible
-
-AI downtime must not block the entire Operational Plan System.
-
-Use:
-
-`QUEUE_CONNECTION=database`
-
-for MVP.
-
-The queue should run using:
-
-```bash
-php artisan queue:work
-```
-
-Do not require Redis initially.
-
----
-
-# 23. Human Evaluation
-
-Create an `evaluations` or `evidence_reviews` table.
-
-Suggested fields:
-
-* id
-* accomplishment_id
-* reviewer_id
+* evaluator_id
+* organizational_unit_id nullable
 * rating nullable
 * decision
 * remarks nullable
-* reviewed_at
+* is_override boolean default false
+* overrides_evaluation_id nullable
+* evaluated_at
 * timestamps
 
 Official rating:
@@ -1024,49 +1077,279 @@ Official rating:
 * 2
 * 3
 
-Decision:
+Mapping:
+
+0 = Did Not Meet Requirements
+
+1 = Somehow Met Requirements
+
+2 = Met Requirements
+
+3 = Exceeded Requirements
+
+Decisions:
 
 * accepted
+* request_revision
 * request_additional_evidence
 * rejected
 
-Rating mapping:
+Evaluation records are historical.
 
-0:
-Did Not Meet Requirements
-
-1:
-Somehow Met Requirements
-
-2:
-Met Requirements
-
-3:
-Exceeded Requirements
-
-Require reviewer remarks when:
-
-* rating is 0
-* rating is 1
-* requesting additional evidence
-* rejecting a submission
-
-Preserve review history.
-
-Do not overwrite previous evaluations after resubmission.
+Never overwrite an older evaluation.
 
 ---
 
-# 24. Official Operational Plan Table View
+# 30. VP Evaluation
 
-Create an Operational Plan view that resembles the institution's existing form.
+A Vice President may evaluate an accomplishment belonging to an organizational unit inside their executive scope.
+
+Example:
+
+SITE accomplishment
+→ VP Academic reviews
+→ VP Academic assigns rating 2
+→ VP Academic enters remarks
+
+This evaluation becomes the current/effective executive rating unless superseded by a higher-authority evaluation.
+
+---
+
+# 31. Presidential Review and Override
+
+The University President can review an OP/accomplishment that has already been evaluated by a Vice President.
+
+The President may:
+
+* agree with the VP evaluation
+* add additional remarks without changing the rating
+* create a new evaluation
+* override the VP rating
+
+When overriding:
+
+Do NOT modify or delete the VP evaluation.
+
+Example:
+
+VP Evaluation:
+
+Rating:
+2 — Met Requirements
+
+President Evaluation:
+
+Rating:
+3 — Exceeded Requirements
+
+`is_override = true`
+
+`overrides_evaluation_id = [VP evaluation ID]`
+
+The effective/final rating becomes the President's rating.
+
+The VP evaluation remains visible in history.
+
+---
+
+# 32. Effective Rating Rule
+
+The application must distinguish between:
+
+* evaluation history
+* current/effective rating
+
+If only a VP evaluation exists:
+
+Effective Rating = VP rating
+
+If a President evaluation overrides the VP:
+
+Effective Rating = President rating
+
+Do not hide the VP evaluation.
+
+Display both.
+
+Example:
+
+First Semester
+
+VP Academic
+2 — Met Requirements
+
+President
+3 — Exceeded Requirements
+Overrides VP Evaluation
+
+Official / Effective Rating
+3 — Exceeded Requirements
+
+---
+
+# 33. Revised Remark System
+
+Remarks must not exist only as one large text field for the whole Operational Plan.
+
+Executives must be able to attach remarks to specific parts of the OP.
+
+Create a generalized table such as:
+
+`remarks`
+
+Suggested fields:
+
+* id
+* academic_year_id
+* operational_plan_id
+* author_id
+* remarkable_type
+* remarkable_id
+* field_key nullable
+* reporting_period_id nullable
+* category nullable
+* content
+* status
+* resolved_by nullable
+* resolved_at nullable
+* timestamps
+
+Use a polymorphic relationship where appropriate.
+
+Possible targets include:
+
+* OperationalPlan
+* KeyResultArea
+* PlanItem
+* Accomplishment
+* Evidence
+* Evaluation
+
+---
+
+# 34. Field-Level Remarks
+
+For Plan Items, allow a remark to identify a specific field.
+
+Possible `field_key` values:
+
+* accountable
+* goal
+* kra_name
+* objective
+* strategy
+* kpi_target_text
+* co_accountables
+* resources_needed
+* documentary_evidence_requirements
+* accomplishment_text
+* evidence
+* evaluation
+
+Example:
+
+Plan Item 15
+
+Field:
+
+`kpi_target_text`
+
+VP Academic Remark:
+
+"Please specify whether this target is per semester or per Academic Year."
+
+The President may independently add:
+
+"Agree with the VP. The measurement period must be explicit."
+
+Both remarks remain visible.
+
+---
+
+# 35. Remark Status
+
+Statuses:
+
+* open
+* addressed
+* resolved
+
+Executives can create remarks.
+
+Office Head/Staff can view remarks and make requested revisions.
+
+Where appropriate they may mark a remark:
+
+`addressed`
+
+The authorized Executive may mark it:
+
+`resolved`
+
+Do not delete old remarks simply because a change was made.
+
+Preserve the review history.
+
+---
+
+# 36. Operational Plan Review Summary
+
+Create a consolidated review summary.
+
+The summary should aggregate remarks belonging to the selected Operational Plan.
+
+Display:
+
+* total remarks
+* open remarks
+* addressed remarks
+* resolved remarks
+* remarks by President
+* remarks by VP
+* remarks grouped by KRA
+* remarks grouped by Plan Item
+* remarks grouped by field
+* semester-specific remarks where applicable
+
+Example:
+
+REVIEW SUMMARY
+
+Open Remarks: 5
+Resolved Remarks: 3
+
+VP Academic
+
+KRA 1 → Objective
+"Clarify the intended outcome."
+
+KRA 1 → KPI / Target
+"Specify measurement period."
+
+President
+
+KRA 1 → KPI / Target
+"Agree with VP; revise before approval."
+
+KRA 2 → Documentary Evidence
+"Provide the specific required documentary record."
+
+Clicking a remark in the UI should navigate to or highlight the relevant section where practical.
+
+Do not require users to search manually through the entire OP for comments.
+
+---
+
+# 37. Official Operational Plan View
+
+Provide a Print / Official View resembling the institutional form.
 
 Columns:
 
 1. Key Result Area
 2. Objectives
 3. Strategies
-4. Key Performance Indicators / Targets
+4. KPI / Targets
 5. Unit Co-Accountable
 6. Resources Needed
 7. Documentary Evidence
@@ -1076,583 +1359,402 @@ Columns:
    * Second Semester
 9. Remarks
 
-The browser data-entry UI does not need to force users to edit a giant spreadsheet-like table.
+The editing interface does not need to be a giant spreadsheet.
 
-Use usable forms/cards/dialogs for data entry.
+Use structured forms/cards/dialogs for editing.
 
-However, provide a `Print / Official View` that visually resembles the institutional table.
-
-Where practical, repeated KRA/objective cells may be visually grouped.
+The official view should reproduce the institutional table layout as closely as practical.
 
 ---
 
-# 25. Export by Academic Year
+# 38. Planning Workflow — Revised
 
-This is a core requirement.
+For the selected Academic Year:
 
-The user must explicitly select an Academic Year before exporting.
+Secretary / Staff
+→ prepares draft OP
 
-Example:
+Office Head
+→ reviews draft
+→ edits if necessary
+→ submits OP
 
-`AY 2025–2026`
+System determines parent Executive.
 
-Export must include only:
+Executive
+→ reviews OP
+→ adds section/field remarks where necessary
 
-* operational plans belonging to AY 2025–2026
-* KRAs under those plans
-* Plan Items under those KRAs
-* First Semester ratings belonging to AY 2025–2026
-* Second Semester ratings belonging to AY 2025–2026
-* remarks belonging to those evaluations
+Decision:
 
-Never accidentally include records from another Academic Year.
+Approved
+→ OP becomes approved/locked
 
-Support at least an official printable/exportable report.
-
-The export should contain:
-
-Institution header/title
-
-`OPERATIONAL PLAN`
-
-`AY 2025–2026`
-
-Then:
-
-Office:
-[Department / Office]
-
-Accountable:
-[Accountable Person / Position]
-
-Goal:
-[Goal]
-
-Evaluation Criteria:
-
-`3 - Exceeded Requirements`
-
-`2 - Met Requirements`
-
-`1 - Somehow Met Requirements`
-
-`0 - Did Not Meet Requirements`
-
-Then the official table:
-
-* Key Result Area
-* Objectives
-* Strategies
-* Key Performance Indicators / Targets
-* Unit Co-Accountable
-* Resources Needed
-* Documentary Evidence
-* First Semester
-* Second Semester
-* Remarks
-
-For the MVP prioritize:
-
-1. browser print view
-2. PDF-friendly output
-
-Do not make Excel export a blocker unless it can be added cleanly.
-
-Architect exports so Excel can be added later.
-
----
-
-# 26. Academic Year Filtering Everywhere
-
-Every major page should clearly show the currently selected Academic Year.
-
-Examples:
-
-Dashboard — AY 2025–2026
-
-Operational Plans — AY 2025–2026
-
-Evidence Review — AY 2025–2026
-
-Reports — AY 2025–2026
-
-Users should not become confused about which year's records they are editing.
-
-If an Academic Year is closed:
-
-Department Users:
-read-only
-
-Reviewer:
-read-only by default
-
-Super Admin:
-may have an explicit administrative reopen mechanism if implemented
-
-Never silently allow editing of historical years.
-
----
-
-# 27. Dashboard
-
-## Department Dashboard
-
-For selected Academic Year show:
-
-* plan status
-* number of KRAs
-* number of Plan Items
-* First Semester submissions
-* Second Semester submissions
-* pending evidence
-* returned submissions
-* accepted accomplishments
-* evaluation summary
-
-## Reviewer / Admin Dashboard
-
-For selected Academic Year show:
-
-* departments with plans
-* departments without plans
-* draft plans
-* submitted plans
-* approved plans
-* accomplishments awaiting review
-* evidence analysis pending
-* returned accomplishments
-* accepted accomplishments
-* average/summary ratings where meaningful
-
-Do not mix Academic Years.
-
----
-
-# 28. Planning Workflow
-
-For selected Academic Year:
-
-Department User
-→ Create Operational Plan
-→ Enter Accountable
-→ Enter Goal
-→ Add KRA
-→ Add Plan Items
-→ Submit Plan
-
-Reviewer:
-
-Submitted
-→ Approve
-
-or:
-
-Submitted
-→ Return for Revision
+Returned
+→ Office Head/Staff revises
+→ remarks remain visible
+→ Office Head resubmits
 
 After approval:
 
-Department User should not freely change official planning fields.
+Planning fields should not be freely changed.
 
-Changes after approval should require an authorized workflow or administrative action.
+Administrative reopening or controlled revision is required.
 
 ---
 
-# 29. Semester Monitoring Workflow
+# 39. Example Academic Approval Workflow
 
-Example:
+SITE Secretary
+→ prepares SITE OP
+
+SITE Dean
+→ reviews
+→ submits
+
+VP Academic
+→ reviews
+→ remarks where necessary
+→ approves or returns
+
+Because SITE belongs under Academic Affairs.
+
+---
+
+# 40. VP Academic's Own Operational Plan
+
+VP Academic / assigned staff
+→ prepares Academic Affairs OP
+
+VP Academic
+→ submits
+
+University President
+→ reviews
+→ comments
+→ approves or returns
+
+VP Academic cannot approve their own OP.
+
+---
+
+# 41. Semester Monitoring Workflow — Revised
 
 Approved Plan Item
-→ First Semester reporting period opens
-→ Department enters accomplishment
-→ Department uploads evidence
-→ Department submits
-→ AI analysis runs
-→ Reviewer reviews
-→ Reviewer assigns rating 0–3
-→ Reviewer enters remarks
-→ First Semester evaluation completed
+→ First Semester opens
+→ Office Head/Staff records accomplishment
+→ Evidence uploaded
+→ Office Head submits
+→ Executive reviews manually
+→ Executive assigns rating 0–3
+→ Executive adds remarks
+→ Executive accepts / returns / rejects
 
-Later:
+If under Academic Affairs:
 
-Second Semester reporting period
-→ same workflow
+VP Academic can evaluate immediately.
 
-The official plan export then displays:
+President may subsequently:
 
-First Semester Rating
+* view
+* add remarks
+* evaluate
+* override VP rating
 
-Second Semester Rating
-
-Remarks
-
-for the selected Academic Year.
+Second Semester repeats the same workflow.
 
 ---
 
-# 30. Evidence Resubmission
+# 42. Evidence Resubmission
 
-If reviewer requests additional evidence:
+If additional evidence or revisions are requested:
 
-Current evaluation/review remains in history.
+Existing evaluation remains in history.
+
+Existing evidence remains stored.
+
+Existing remarks remain stored.
 
 Accomplishment becomes returned.
 
-Department uploads additional evidence.
+Office Head/Staff:
 
-Department resubmits.
+* uploads additional evidence
+* updates accomplishment where allowed
+* responds to remarks
+* resubmits
 
-Create a new EvidenceAnalysis.
+Executive reviews again.
 
-Reviewer reviews again.
+Create a new evaluation rather than overwriting the previous one.
 
-Never destroy:
-
-* previous evidence
-* previous AI analysis
-* previous review
-* previous reviewer remarks
-
-Auditability is essential.
+Auditability is mandatory.
 
 ---
 
-# 31. Authorization
+# 43. Authorization
 
-Create Policies for important entities.
-
-At minimum:
+Create Policies for at least:
 
 * AcademicYear
-* Department
+* OrganizationalUnit
 * OperationalPlan
 * KeyResultArea
 * PlanItem
 * Accomplishment
 * Evidence
 * Evaluation
+* Remark
 
 Rules include:
 
-Department User cannot view another department's operational-plan details.
+Staff:
 
-Department User cannot modify another department's plan.
+* can access assigned organizational unit only
+* cannot access unrelated private OPs
+* cannot approve OPs
+* cannot assign executive ratings
 
-Department User cannot assign official ratings.
+Office Head:
 
-Department User cannot approve their own evidence.
+* can access/manage own organizational unit
+* can submit own unit OP
+* cannot approve own OP
+* cannot assign an executive rating to their own accomplishment
 
-Department User cannot edit a closed Academic Year.
+Executive:
 
-Reviewer can review but should not casually alter the department's original planning data.
+* can view university-wide records and organizational units
+* can approve subordinate OPs
+* can evaluate subordinate accomplishments
 
-Super Admin has administrative access.
+President Executive:
 
-Always enforce these rules server-side.
+* has university-wide executive scope
+* may review and override subordinate Executive evaluations
+
+Vice President Executive:
+
+* limited by organizational scope
+* cannot act on unrelated executive branches without explicit authorization
+
+System Admin:
+
+* has technical administrative access
+* does not automatically become academic evaluator
+
+Closed Academic Years:
+
+* ordinary editing prohibited
+* reopen requires explicit administrative action
+
+All authorization must be enforced server-side.
 
 ---
 
-# 32. Validation
+# 44. Organizational Scope Resolution
 
-Use Form Requests where appropriate.
+Implement reusable application logic for hierarchy-based scope.
+
+Example conceptual methods:
+
+* `isAssignedToUnit()`
+* `canManageUnit()`
+* `canViewUnit()`
+* `canApprovePlan()`
+* `canEvaluateAccomplishment()`
+* `isAncestorOf()`
+* `descendantUnitIds()`
+
+Do not duplicate organizational access logic across controllers.
+
+Consider a focused service/action/helper where appropriate.
+
+Policies remain the authoritative authorization layer.
+
+---
+
+# 45. Validation
+
+Use Form Requests.
 
 Validate:
 
 * Academic Year
-* department ownership
-* plan uniqueness by department/year
+* organizational unit ownership
+* unique OP per unit/year
 * plan status
 * reporting period belongs to same Academic Year
-* dates
-* numeric target fields
-* official rating range 0–3
-* file type
-* file size
-* required evidence metadata
-* review permissions
+* organizational hierarchy permissions
+* user assignments
+* approval authority
+* no self-approval
+* accomplishment status
+* evidence file type
+* evidence file size
+* official rating 0–3
+* override authority
+* valid overridden evaluation
+* remark target
+* remark field key
 * closed Academic Year restrictions
 
-Do not rely on React validation alone.
+Do not rely solely on frontend validation.
 
 ---
 
-# 33. Audit Trail
+# 46. Audit Trail
 
-Preserve important events.
+Preserve important events including:
 
-At minimum capture:
-
-* who created a plan
+* plan creator
 * Academic Year
-* who submitted a plan
-* when submitted
-* who approved/returned it
-* who created/modified Plan Items
-* who submitted accomplishments
+* organizational unit
+* user who modified draft
+* submission
+* submission timestamp
+* approval
+* return for revision
+* approver
+* approval timestamp
+* KRA changes
+* Plan Item changes
+* accomplishment submission
 * reporting period
-* who uploaded evidence
-* evidence upload timestamps
-* AI provider
-* AI model
-* prompt version
-* AI analysis timestamp
-* reviewer
-* official rating
-* reviewer decision
+* evidence uploader
+* evidence timestamps
+* evaluation author
+* rating
+* decision
+* evaluation timestamp
+* Presidential override
+* original VP evaluation
 * remarks
-* review timestamp
+* remark author
+* remark target
+* remark status changes
 * resubmissions
 
-Do not silently overwrite important historical information.
+Do not silently overwrite historically important data.
 
 ---
 
-# 34. Seed Data
+# 47. Dashboard — Revised
 
-Create useful development seeders.
+## Staff / Office Head Dashboard
 
-Academic Years:
+For selected Academic Year show:
 
-* AY 2025–2026
-* AY 2026–2027
+* OP status
+* number of KRAs
+* Plan Item count
+* open Executive remarks
+* addressed remarks
+* First Semester accomplishment status
+* Second Semester accomplishment status
+* missing/pending evidence
+* returned accomplishments
+* accepted accomplishments
+* current ratings
+* evaluation history summary
 
-Make one current/open.
+## Executive Dashboard
 
-Reporting periods:
+For selected Academic Year show data only within Executive scope.
 
-* First Semester
-* Second Semester
+Examples:
 
-Departments:
+* subordinate organizational units
+* units with OP
+* units without OP
+* draft OPs
+* submitted OPs
+* returned OPs
+* approved OPs
+* accomplishments awaiting review
+* returned accomplishments
+* accepted accomplishments
+* open remarks
+* evaluation completion
+* rating summaries where meaningful
 
-* Center for Planning, Research, Innovations, and New Technologies
-* Information and Communications Technology
-* Quality Assurance
-* Human Resources
-* Finance
-* Planning Office
+For President:
 
-Create demo accounts:
+show university-wide information.
 
-* Super Admin
-* Reviewer
-* Department User
+For VP Academic:
 
-Clearly mark them as development/demo credentials.
+show Academic Affairs and descendant units.
+
+Do not mix Academic Years.
 
 ---
 
-# 35. Seed a Sample Plan Based on the Institutional Format
+# 48. Navigation — Revised
 
-Create a sample Operational Plan for:
-
-Academic Year:
-AY 2025–2026
-
-Office:
-Center for Planning, Research, Innovations, and New Technologies
-
-Accountable:
-CPRINT Director
-
-Goal:
-
-`To ensure the full integration of ethical AI and digital technologies in teaching, learning, research, and administrative processes through 100% adoption, capacity building, and efficient, timely, and high-quality reporting systems.`
-
-Create:
-
-KRA 1:
-`Quality Teaching, Learning, and Student Services`
-
-Add representative Plan Items based on the supplied institutional sample.
-
-Examples include:
-
-### Plan Item
-
-Objective:
-`Ethical usage and integration of AI tools in teaching and learning modules`
-
-Strategy:
-`Develop AI Usage Guidelines`
-
-KPI / Target:
-`Institutional research-based AI guidelines are developed and approved`
-
-Documentary Evidence:
-`Approved AI Guidelines and Policy Documents`
-
-### Plan Item
-
-Strategy:
-`Monitor and Evaluate AI Use`
-
-KPI / Target:
-`At least 1 monitoring/evaluation study conducted per year on AI use in instruction`
-
-Co-Accountable:
-VPA, ICT, QA, CEARA
-
-Resources:
-`Digital Tools and Platforms for AI Monitoring and Evaluation`
-
-Documentary Evidence:
-`Monitoring and Evaluation Reports on AI Use`
-
-### Plan Item
-
-KPI / Target:
-`80% of programs evaluated using AI integration research-based tools`
-
-Documentary Evidence:
-`Program Evaluation Records and Tools`
-
-### Plan Item
-
-Objective:
-`100% professional development and internalization of AI-based LMS for Student Services`
-
-Strategy:
-`Build faculty capability on AI-assisted research`
-
-KPI / Target:
-`100% of researchers trained on AI tools for research`
-
-Documentary Evidence:
-`Training Records and Certificates`
-
-### Plan Item
-
-KPI / Target:
-`At least 2 AI-in-research capability workshops are conducted per year`
-
-Resources:
-`Qualified Trainers and Resource Persons`
-
-Documentary Evidence:
-`Research Outputs Demonstrating AI Utilization`
-
-### Plan Item
-
-Strategy:
-`Monitor and promote AI utilization in research outputs`
-
-KPI / Target:
-`At least 70–80% of research outputs demonstrate use of AI tools`
-
-### Plan Item
-
-KPI / Target:
-`At least 1 research study on AI applications in research processes completed per year`
-
-### Plan Item
-
-Strategy:
-`Develop Research Monitoring System`
-
-KPI / Target:
-`100% of research projects tracked through a centralized monitoring system`
-
-Resources:
-`Centralized Research Monitoring System / Dashboard`
-
-Documentary Evidence:
-`System Screenshots and Dashboard Reports`
-
-### Plan Item
-
-KPI / Target:
-`Real-time monitoring dashboard established and operational`
-
-Resources:
-`Research Monitoring Personnel / System Administrator`
-
-Documentary Evidence:
-`Research Tracking Database / Monitoring Logs`
-
-### Plan Item
-
-Strategy:
-`Strengthen compliance through monitoring and feedback mechanisms`
-
-KPI / Target:
-`100% on-time submission of required reports`
-
-Resources:
-`Standardized Reporting and Monitoring Tools`
-
-Documentary Evidence:
-`Submission Records and Reports`
-
-### Plan Item
-
-KPI / Target:
-`0% delayed submissions across all research projects`
-
-Documentary Evidence:
-`Compliance Reports`
-
-The exact wording may be cleaned slightly, but preserve the meaning and structure of the supplied official document.
-
----
-
-# 36. UI Structure
-
-Create navigation approximately like:
+Suggested navigation:
 
 Dashboard
-
-Academic Years
 
 Operational Plans
 
 Monitoring
 
-Evidence Review
+Evidence
+
+Evaluations
+
+Remarks / Review Summary
 
 Reports
 
 Administration
 
-* Departments
+* Academic Years
+* Organizational Units
 * Users
+* Assignments
 
-The Academic Year selector should be clearly visible near the top navigation/header.
+Show Academic Year selector prominently.
 
 Example:
 
 `Academic Year: [ AY 2025–2026 ▼ ]`
 
-Changing the Academic Year updates the context of the application.
+For Executives, optionally show current scope:
+
+`Scope: Academic Affairs`
+
+or
+
+`Scope: University-wide`
 
 ---
 
-# 37. Operational Plan Editing UI
-
-Do not force users to type into an enormous table.
+# 49. Operational Plan Editor
 
 Use a structured editor.
 
-Example:
-
-Operational Plan
+Header:
 
 * Academic Year
-* Office
+* Organizational Unit / Office
 * Accountable
+* Position
 * Goal
 
-KRA 1
+KRA:
 
 * Code
 * Name
+* Description
 
-Plan Item
+Plan Item:
 
 * Objective
 * Strategy
 * KPI / Target
-* Structured numeric target fields when applicable
+* structured target fields where applicable
 * Unit Co-Accountable
 * Resources Needed
 * Documentary Evidence Requirements
@@ -1667,47 +1769,61 @@ Allow:
 * Reorder Plan Items
 * Remove draft Plan Items
 
-Once submitted/approved, respect workflow restrictions.
+Display remark indicators beside fields.
+
+Example:
+
+KPI / Target
+`At least 2 workshops per Academic Year`
+
+`2 Executive Remarks`
+
+Users can open the remark thread for that exact field.
 
 ---
 
-# 38. Reviewer Screen
+# 50. Executive Review Screen
+
+For Operational Plan review display:
+
+* Academic Year
+* Organizational Unit
+* Accountable
+* Goal
+* KRA structure
+* Plan Items
+* field-level comment buttons
+* unresolved remarks
+* review summary
+
+Actions:
+
+* Approve
+* Return for Revision
+* Add Remark
+
+Use confirmation dialogs for final approval/return actions.
+
+---
+
+# 51. Executive Evaluation Screen
 
 For each accomplishment display:
 
-Academic Year
+* Academic Year
+* Reporting Period
+* Organizational Unit
+* KRA
+* Objective
+* Strategy
+* KPI / Target
+* expected Documentary Evidence
+* reported accomplishment
+* uploaded evidence
+* previous evaluations
+* previous remarks
 
-Reporting Period
-
-Office
-
-KRA
-
-Objective
-
-Strategy
-
-KPI / Target
-
-Expected Documentary Evidence
-
-Reported Accomplishment
-
-Uploaded Evidence
-
-AI Evidence Analysis
-
-AI Sufficiency Score
-
-AI Confidence
-
-AI Findings
-
-Missing Evidence
-
-AI Recommendation
-
-Then Human Evaluation:
+Evaluation section:
 
 Rating:
 
@@ -1718,170 +1834,428 @@ Rating:
 
 Remarks
 
-Actions:
+Decision:
 
 * Accept
+* Request Revision
 * Request Additional Evidence
 * Reject
 
-Use confirmation dialogs for final actions.
+For President additionally show:
+
+* VP evaluation
+* VP rating
+* VP remarks
+* option to agree
+* option to add Presidential evaluation
+* option to override rating
+
+Preserve every evaluation.
 
 ---
 
-# 39. AI Failure Behavior
+# 52. Reports and Export
 
-Handle gracefully:
+User must explicitly select an Academic Year.
 
-* Ollama not running
-* model unavailable
-* AI timeout
-* invalid structured response
-* unreadable evidence
-* unsupported document
-* model uncertainty
+Exports include only records belonging to the selected Academic Year.
 
-Display:
+Official report contains:
 
-`AI analysis unavailable. Manual review is required.`
+OPERATIONAL PLAN
 
-Never lose the department's submission because AI failed.
+Academic Year
 
-Never prevent an authorized human reviewer from reviewing evidence manually.
+Office
+
+Accountable
+
+Goal
+
+Evaluation Criteria:
+
+3 - Exceeded Requirements
+2 - Met Requirements
+1 - Somehow Met Requirements
+0 - Did Not Meet Requirements
+
+Official table:
+
+* Key Result Area
+* Objectives
+* Strategies
+* KPI / Targets
+* Unit Co-Accountable
+* Resources Needed
+* Documentary Evidence
+* First Semester
+* Second Semester
+* Remarks
+
+Where a President has overridden the VP evaluation:
+
+the effective Presidential rating should appear as the official exported rating.
+
+Evaluation history should remain available in the application.
+
+Do not accidentally export records belonging to another Academic Year.
+
+Prioritize:
+
+1. browser print view
+2. PDF-friendly layout
+
+Excel may be added later.
 
 ---
 
-# 40. Testing
+# 53. Remarks in Reports
+
+The official table may show concise/effective evaluation remarks.
+
+Do not force every internal comment into the official printed table.
+
+Provide a separate optional:
+
+`Executive Remarks Summary`
+
+containing:
+
+* author
+* target section
+* KRA
+* Plan Item
+* field
+* remark
+* status
+
+This allows detailed review records without making the official Operational Plan table unreadable.
+
+---
+
+# 54. Seed Data — Revised
+
+Seed:
+
+Academic Years:
+
+* AY 2025–2026
+* AY 2026–2027
+
+Reporting Periods:
+
+* First Semester
+* Second Semester
+
+Create only representative participating organizational units for development.
+
+Example:
+
+* St. Paul University Philippines
+* Office of the President
+* Academic Affairs
+* CPRINT
+* ICT
+* Finance
+* Administrative and General Services
+* Graduate School
+* School of Medicine
+* SASTE
+* SBAHM
+* SITE
+* SNAHS
+* Basic Education Unit
+
+Do not treat this as the final production organizational roster.
+
+Production units must remain administratively configurable.
+
+---
+
+# 55. Demo Users — Revised
+
+Create development/demo accounts such as:
+
+System Admin
+
+President Executive
+
+VP Academic Executive
+
+School Dean / Office Head
+
+Secretary / Staff
+
+Clearly identify them as development credentials.
+
+Example relationships:
+
+President Executive
+→ assigned to university/root executive scope
+
+VP Academic Executive
+→ assigned to Academic Affairs
+
+SITE Dean
+→ office_head
+→ assigned to SITE
+
+SITE Secretary
+→ staff
+→ assigned to SITE
+
+---
+
+# 56. Sample Plan
+
+Continue using the institutional sample Operational Plan as development seed data.
+
+Example:
+
+Academic Year:
+
+AY 2025–2026
+
+Office:
+
+Center for Planning, Research, Innovations, and New Technologies
+
+Goal:
+
+To ensure the full integration of ethical AI and digital technologies in teaching, learning, research, and administrative processes through 100% adoption, capacity building, and efficient, timely, and high-quality reporting systems.
+
+The topic of the sample OP may contain references to AI because that is part of the institution's planning content.
+
+This does NOT mean the Operational Plan System itself uses AI.
+
+Preserve representative:
+
+* KRA
+* Objective
+* Strategy
+* KPI / Target
+* Co-Accountable
+* Resources
+* Documentary Evidence
+
+from the existing institutional sample.
+
+---
+
+# 57. Testing — Revised
 
 Create feature tests for at least:
 
+## Authentication and Context
+
 * authentication
 * Academic Year selection
+* Academic Year persistence
 * Academic Year isolation
 * closed-year restrictions
-* department isolation
-* unique plan per department/year
+
+## Organization
+
+* organizational hierarchy
+* organizational assignment
+* staff unit isolation
+* office head unit isolation
+* executive university-wide read visibility
+* VP approval/evaluation scope isolation
+* President university-wide scope
+
+## Operational Plan
+
+* unique OP per unit/year
 * plan creation
 * KRA creation
 * Plan Item creation
-* plan submission
-* plan approval
+* staff draft editing
+* Office Head submission
+* self-approval prevention
+* VP approval of subordinate school OP
+* President approval of VP OP
+* plan return and resubmission
+
+## Remarks
+
+* add OP-level remark
+* add KRA remark
+* add Plan Item remark
+* add field-level remark
+* staff can view remarks
+* unrelated users cannot view private remarks
+* address remark
+* resolve remark
+* remark summary aggregation
+* remarks preserved after resubmission
+
+## Monitoring
+
 * First Semester accomplishment
 * Second Semester accomplishment
+* accomplishment calculation
+* qualitative KPI handling
+
+## Evidence
+
 * evidence upload
+* private evidence access
 * unauthorized evidence access
-* reviewer access
-* AI job dispatch
-* AI failure handling
-* evaluation rating
+* evidence resubmission
+
+## Evaluation
+
+* VP evaluation
+* rating validation 0–3
+* VP evaluation visible to President
+* President evaluation
+* President override of VP evaluation
+* VP evaluation preserved after override
+* effective rating uses President override
+* unauthorized user cannot override
 * request additional evidence
 * rejection
-* resubmission
-* export filters by Academic Year
+* evaluation history preserved
 
-AI calls must be fake/mockable.
+## Reports
 
-Automated tests must not require Ollama to actually be running.
+* dashboard respects Academic Year
+* executive dashboard respects organizational scope
+* export filters Academic Year
+* export uses effective rating
+* records from another Academic Year never appear
+
+No automated test should require AI, Ollama, or external services.
 
 ---
 
-# 41. Out of Scope for MVP
+# 58. Out of Scope — Revised MVP
 
 Do not implement yet:
 
+* AI evidence analysis
+* Ollama
+* automatic evidence validation
+* automatic official rating
+* AI recommendations
+* OCR
 * custom AI model training
 * fine-tuning
-* vector databases
 * embeddings
+* vector databases
 * RAG
 * semantic search
-* automatic official rating
-* automatic final approval
-* complex OCR microservice
-* Python service
-* mobile application
+* Python
+* FastAPI
+* mobile app
 * SMS
 * real-time websockets
-* multi-tenant SaaS
 * Kubernetes
+* microservices
 * advanced budgeting
 * digital signatures
 * complex report designer
-* advanced forecasting
+* forecasting
 * predictive analytics
+* automatic final approval
+
+All evaluations remain human/manual.
 
 ---
 
-# 42. Coding Standards
+# 59. Coding Standards
 
 Follow existing Laravel conventions.
 
 Use:
 
 * Eloquent relationships
+* recursive/hierarchical organizational relationships where appropriate
 * Form Requests
 * Policies
 * PHP enums where appropriate
-* service/action classes for important workflows
-* queued Jobs
+* action/service classes for important workflows
 * TypeScript
 * React functional components
-* reusable UI components
+* reusable components
 
 Keep controllers thin.
 
-Do not build unnecessary repositories.
+Do not introduce unnecessary repository layers.
 
 Do not hardcode:
 
 * Academic Year IDs
-* department IDs
-* AI API keys
-* AI URLs
-* model names where config should be used
+* organizational unit IDs
+* user IDs
+* President user ID
+* VP Academic user ID
+* school IDs
+
+Authorization must be relationship/scope-based.
 
 Do not perform unrelated refactors.
 
 ---
 
-# 43. Implementation Order
+# 60. Revised Implementation Order
 
-Implement incrementally.
+## Phase 1 — Revised Foundation
 
-## Phase 1 — Foundation
+Inspect the existing project.
 
-Inspect project.
-
-Then implement:
+Implement:
 
 * AcademicYear
 * ReportingPeriod
-* Department
-* User role/department fields
-* enums
-* relationships
-* seeders
+* OrganizationalUnit
+* hierarchical parent/child relationships
+* User role
+* OrganizationalUnitUserAssignment
+* role enums
+* assignment enums
 * Academic Year selector
 * authorization foundation
+* organizational scope resolution
+* representative seeders
 
-Run tests.
+Run:
+
+* migrations
+* backend tests
+* frontend type checking
+* frontend build/check if configured
+
+Fix failures.
 
 Stop and summarize.
 
 ---
 
-## Phase 2 — Operational Plan
+## Phase 2 — Operational Plan and Executive Approval
 
 Implement:
 
 * OperationalPlan
 * KeyResultArea
 * PlanItem
-* Co-Accountable units
+* co-accountable organizational units
 * Documentary Evidence Requirements
 * plan editor
-* submission workflow
-* approval/return workflow
+* Office Head submission
+* Executive approval/return
+* hierarchy-based approving authority
+* prevent self-approval
+* Operational Plan review history
 * official plan view
+
+Also implement:
+
+* generalized Remarks
+* field-level remarks
+* remark status
+* Review Summary
 
 Run tests.
 
@@ -1889,32 +2263,23 @@ Stop and summarize.
 
 ---
 
-## Phase 3 — Semester Monitoring
+## Phase 3 — Semester Monitoring and Evidence
 
 Implement:
 
 * Accomplishment
 * reporting-period workflow
 * calculated accomplishment where appropriate
-* First Semester monitoring
-* Second Semester monitoring
-
-Run tests.
-
-Stop and summarize.
-
----
-
-## Phase 4 — Evidence
-
-Implement:
-
-* private evidence storage
-* upload
-* view
-* download
+* First Semester
+* Second Semester
+* private evidence upload
+* evidence view
+* evidence download
 * evidence metadata
-* permissions
+* evidence permissions
+* return/resubmission behavior
+
+No AI.
 
 Run tests.
 
@@ -1922,41 +2287,24 @@ Stop and summarize.
 
 ---
 
-## Phase 5 — AI
+## Phase 4 — Manual Executive Evaluation
 
 Implement:
 
-* EvidenceAnalyzer
-* structured output
-* AnalyzeEvidence job
-* Ollama configuration
-* EvidenceAnalysis
-* error handling
-
-First prove text-only communication.
-
-Then add supported image/document handling incrementally.
-
-Run tests.
-
-Stop and summarize.
-
----
-
-## Phase 6 — Human Evaluation
-
-Implement:
-
-* reviewer queue
-* detailed evidence review
-* AI findings
-* official 0–3 rating
-* remarks
+* Executive evaluation queue/list
+* detailed accomplishment review
+* official rating 0–3
+* evaluation remarks
 * accept
+* request revision
 * request additional evidence
 * reject
-* resubmission
-* review history
+* evaluation history
+* VP evaluation
+* Presidential review
+* Presidential override
+* effective rating calculation
+* preservation of previous evaluations
 
 Run tests.
 
@@ -1964,58 +2312,169 @@ Stop and summarize.
 
 ---
 
-## Phase 7 — Dashboard and Export
+## Phase 5 — Dashboard, Reports, and Export
 
 Implement:
 
-* Academic Year dashboard
-* department monitoring
+* Staff dashboard
+* Office Head dashboard
+* Executive dashboard
+* President university-wide dashboard
+* VP university-wide dashboard with scoped review actions
+* open remarks summary
+* evaluation summaries
+* monitoring reports
 * annual reports
 * official Operational Plan print view
-* export filtered by selected Academic Year
+* PDF-friendly export
+* Academic Year isolation
+* effective evaluation rating in official report
 
 Run tests.
 
+Stop and summarize.
+
 ---
 
-# 44. MVP Definition of Done
+## Phase 6 — MVP Hardening
 
-The MVP is complete when this scenario works:
+Audit:
 
-1. Super Admin creates AY 2025–2026.
-2. First Semester and Second Semester exist under that Academic Year.
-3. Super Admin creates departments and users.
-4. Department User selects AY 2025–2026.
-5. Department User creates its Operational Plan.
-6. Department enters Accountable and Goal.
-7. Department creates KRA 1.
-8. Department creates Plan Items containing:
+* authorization
+* hierarchy traversal
+* self-approval prevention
+* executive scope
+* President override
+* Academic Year isolation
+* evidence privacy
+* remark visibility
+* audit history
+* closed Academic Year restrictions
+* report filtering
 
-   * Objective
-   * Strategy
-   * KPI / Target
-   * Unit Co-Accountable
-   * Resources Needed
-   * Documentary Evidence Requirements
-9. Department submits the plan.
-10. Reviewer approves it.
-11. First Semester opens.
-12. Department reports an accomplishment.
-13. Department uploads documentary evidence.
-14. Department submits it.
-15. AI analysis is queued.
-16. Ollama analyzes evidence.
-17. Structured AI results are stored.
-18. Reviewer sees the evidence and AI findings.
-19. Reviewer assigns official rating 0–3.
-20. Reviewer enters remarks.
-21. Second Semester can later repeat the process.
-22. Another department cannot access these records.
-23. User switches to AY 2026–2027.
-24. AY 2025–2026 records no longer appear in ordinary AY 2026–2027 views.
-25. User switches back to AY 2025–2026 and historical data remains intact.
-26. Reviewer selects AY 2025–2026 and exports the Operational Plan.
-27. The export contains:
+Run the complete automated test suite.
+
+Run frontend/type checks.
+
+Fix all relevant failures.
+
+---
+
+# 61. Revised MVP Definition of Done
+
+The revised MVP is complete when the following scenario works:
+
+1. System Admin creates AY 2025–2026.
+
+2. First Semester and Second Semester exist under the Academic Year.
+
+3. System Admin creates the organizational hierarchy.
+
+4. System Admin creates or assigns:
+
+   * President Executive
+   * VP Academic Executive
+   * School Dean / Office Head
+   * Secretary / Staff
+
+5. President is assigned university-wide/root executive scope.
+
+6. VP Academic is assigned Academic Affairs.
+
+7. Schools under VP Academic are children/descendants of Academic Affairs.
+
+8. Secretary prepares the school's Operational Plan.
+
+9. Office Head reviews it.
+
+10. Office Head submits the plan.
+
+11. VP Academic can immediately see the submitted OP through university-wide Executive read visibility.
+
+12. VP Academic can add remarks to:
+
+    * Goal
+    * KRA
+    * Objective
+    * Strategy
+    * KPI / Target
+    * Co-Accountable
+    * Resources
+    * Documentary Evidence
+    * other supported sections
+
+13. The system summarizes all VP remarks in the Operational Plan Review Summary.
+
+14. VP Academic approves or returns the school OP.
+
+15. If returned, previous remarks remain visible.
+
+16. Office Head/Staff revises the plan.
+
+17. VP approves the plan.
+
+18. VP Academic prepares/submits their own Academic Affairs OP.
+
+19. VP Academic cannot approve their own OP.
+
+20. University President receives the VP Academic OP.
+
+21. President approves or returns it.
+
+22. First Semester opens.
+
+23. School Staff/Office Head records accomplishment.
+
+24. Evidence is uploaded.
+
+25. Office Head submits accomplishment.
+
+26. VP Academic manually reviews accomplishment and evidence.
+
+27. VP Academic assigns an official rating 0–3.
+
+28. VP Academic adds evaluation remarks.
+
+29. President can see the VP evaluation.
+
+30. President may agree without changing it.
+
+31. President may add additional remarks.
+
+32. President may create a higher-authority evaluation.
+
+33. President may override the VP rating.
+
+34. When President overrides:
+
+    * VP rating remains in history
+    * VP remarks remain in history
+    * President rating becomes effective/final
+    * override relationship is recorded
+
+35. Second Semester can repeat the same process.
+
+36. Staff cannot access unrelated schools/offices.
+
+37. Office Head cannot access unrelated private OPs.
+
+38. VP Academic can view unrelated VP areas but cannot approve, return, or evaluate records outside Academic Affairs.
+
+39. President can view university-wide OPs.
+
+40. User switches to AY 2026–2027.
+
+41. AY 2025–2026 records disappear from ordinary AY 2026–2027 views.
+
+42. User switches back to AY 2025–2026.
+
+43. Historical information remains intact.
+
+44. Executive selects AY 2025–2026.
+
+45. Executive exports the Operational Plan.
+
+46. Export contains:
 
     * Office
     * Accountable
@@ -2024,17 +2483,24 @@ The MVP is complete when this scenario works:
     * Objectives
     * Strategies
     * KPI / Targets
-    * Unit Co-Accountable
+    * Co-Accountable Units
     * Resources Needed
     * Documentary Evidence
     * First Semester Rating
     * Second Semester Rating
-    * Remarks
-28. No records belonging to another Academic Year appear in that export.
+    * effective/final remarks
+
+47. If the President overrode the VP, the Presidential rating appears as the official/effective rating.
+
+48. VP evaluation remains available in evaluation history.
+
+49. No data belonging to another Academic Year appears in the export.
+
+50. No AI or Ollama dependency is required for any MVP workflow.
 
 ---
 
-# 45. First Instruction to Execute
+# 62. First Instruction to Execute — REVISED
 
 Do not build the entire MVP immediately.
 
@@ -2047,24 +2513,71 @@ Report:
 3. React version
 4. Inertia version
 5. starter-kit structure
-6. `laravel/ai` version
-7. current database configuration
-8. current queue configuration
-9. authentication implementation
-10. current migrations
-11. current models
-12. current routes
+6. TypeScript configuration
+7. Tailwind/shadcn configuration
+8. current PostgreSQL configuration
+9. current queue configuration for awareness only
+10. authentication implementation
+11. current migrations
+12. current models
+13. current routes
+14. existing Policies/Gates
+15. existing tests
 
-Then propose the exact Phase 1 schema, including:
+Then compare the current codebase against this:
 
-* academic_years
-* reporting_periods
-* departments
-* required users-table changes
+**REVISED MVP PLAN**
 
-Explain the relationships and important constraints.
+Identify anything already implemented from the previous plan that conflicts with the revised requirements.
 
-Then implement **Phase 1 only**.
+In particular inspect for:
+
+* `departments`
+* `department_id`
+* old user roles
+* Reviewer / Planning Office role
+* Department User role
+* AI models/services
+* `EvidenceAnalysis`
+* `AnalyzeEvidence`
+* Ollama configuration
+* AI-specific accomplishment statuses
+* existing evaluation structure
+* existing remarks implementation
+
+Do not blindly delete working code.
+
+Report what should be:
+
+* retained
+* renamed
+* migrated
+* refactored
+* disabled
+* removed
+
+Then propose the exact revised Phase 1 database schema for:
+
+* `academic_years`
+* `reporting_periods`
+* `organizational_units`
+* `organizational_unit_user_assignments`
+* required changes to `users`
+
+Explain:
+
+* organizational hierarchy
+* Executive scope
+* President scope
+* VP scope
+* Office Head scope
+* Staff scope
+* important uniqueness constraints
+* server-side authorization strategy
+
+Then implement:
+
+**REVISED PHASE 1 ONLY**
 
 Run migrations.
 
@@ -2072,15 +2585,63 @@ Run relevant automated tests.
 
 Run frontend/type checks if configured.
 
-Fix any failures.
+Fix failures related to Phase 1.
 
-At the end, provide a concise summary of:
+At the end provide a concise implementation summary:
 
 * files created
 * files modified
+* migrations added
+* migrations changed
 * database tables added
+* old structures migrated/refactored
+* roles created
+* seeders created
 * tests added
 * commands run
-* remaining Phase 2 work
+* test results
+* remaining Revised Phase 2 work
 
-Do not proceed to Phase 2 until Phase 1 is stable.
+Do not proceed to Phase 2 until Revised Phase 1 is stable.
+
+---
+
+# FINAL IMPLEMENTATION PRINCIPLE
+
+This is the **REVISED Operational Plan System MVP**.
+
+The MVP is:
+
+**Academic Year centered**
+
+**hierarchy-aware**
+
+**manually evaluated**
+
+**Executive supervised**
+
+**President-overridable**
+
+**remark-driven**
+
+**auditable**
+
+**organization-scoped**
+
+**Laravel based**
+
+and contains **no AI dependency for now**.
+
+The President and Vice Presidents share the same `executive` role.
+
+They have the same university-wide read visibility. Their organizational assignments determine authoring, approval, evaluation, and remark-resolution authority.
+
+The VP evaluates the Operational Plans and accomplishments under their area.
+
+The President and Vice Presidents can view university-wide records. The President may override a subordinate Executive evaluation through the university-root authority assignment.
+
+Every important comment or evaluation must preserve history.
+
+Remarks should be attachable to specific sections and fields and summarized for convenient executive review.
+
+Secretary / Staff users support their Office Head but do not replace executive or Office Head accountability.

@@ -4,18 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Actions\OperationalPlans\CreateOperationalPlan;
 use App\Actions\OperationalPlans\UpdateOperationalPlan;
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Data\OperationalPlanData;
+use App\Data\OperationalPlanReviewData;
+use App\Enums\RemarkCategory;
+use App\Enums\RemarkField;
 use App\Enums\TargetOperator;
 use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Http\Requests\StoreOperationalPlanRequest;
 use App\Http\Requests\UpdateOperationalPlanRequest;
 use App\Http\Requests\ViewOperationalPlanRequest;
 use App\Models\AcademicYear;
-use App\Models\Department;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
+use App\Models\OrganizationalUnit;
+use App\Models\Remark;
+use App\Models\ReportingPeriod;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +32,8 @@ use Inertia\Response;
 
 class OperationalPlanController extends Controller
 {
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     public function index(string $currentTeam, Request $request): Response
     {
         Gate::authorize('viewAny', OperationalPlan::class);
@@ -35,8 +45,8 @@ class OperationalPlanController extends Controller
             'operationalPlans' => $academicYear instanceof AcademicYear && $user instanceof User
                 ? $this->operationalPlans($academicYear, $user)
                 : [],
-            'targetDepartments' => $academicYear instanceof AcademicYear && $user instanceof User
-                ? $this->targetDepartments($academicYear, $user)
+            'targetOrganizationalUnits' => $academicYear instanceof AcademicYear && $user instanceof User
+                ? $this->targetOrganizationalUnits($academicYear, $user)
                 : [],
             'accountableUsers' => $academicYear instanceof AcademicYear && $user instanceof User
                 ? $this->accountableUsers($academicYear, $user)
@@ -54,7 +64,7 @@ class OperationalPlanController extends Controller
 
         $operationalPlan = $createOperationalPlan->handle(
             $request->selectedAcademicYear(),
-            $request->department(),
+            $request->organizationalUnit(),
             $actor,
             $request->validatedPlanData(),
         );
@@ -69,29 +79,63 @@ class OperationalPlanController extends Controller
 
     public function show(ViewOperationalPlanRequest $request, string $currentTeam): Response
     {
-        $operationalPlan = $this->loadDetail($request->operationalPlan());
+        $operationalPlan = $request->operationalPlan();
         $actor = $request->user();
         assert($actor instanceof User);
+        $reportingPeriods = ReportingPeriod::query()
+            ->whereBelongsTo($operationalPlan->academicYear)
+            ->orderBy('sequence')
+            ->get();
+        $selectedReportingPeriod = $this->selectedReportingPeriod($request, $reportingPeriods);
+        $operationalPlan = $this->loadDetail($operationalPlan, $selectedReportingPeriod);
 
         return Inertia::render('operational-plans/show', [
-            'operationalPlan' => OperationalPlanData::detail($operationalPlan),
+            'operationalPlan' => OperationalPlanData::detail($operationalPlan, $selectedReportingPeriod, $actor),
             'permissions' => $this->permissions($actor, $operationalPlan),
-            'accountableUsers' => User::query()
-                ->select(['id', 'name', 'department_id'])
-                ->where('department_id', $operationalPlan->department_id)
-                ->orderBy('name')
-                ->get(),
-            'coAccountableDepartments' => Department::query()
+            'accountableUsers' => $this->accountableUsersForUnits([$operationalPlan->organizational_unit_id]),
+            'coAccountableOrganizationalUnits' => OrganizationalUnit::query()
                 ->select(['id', 'name', 'code', 'is_active'])
                 ->orderBy('name')
                 ->get()
-                ->map(fn (Department $department): array => [
-                    'id' => $department->id,
-                    'name' => $department->name,
-                    'code' => $department->code,
-                    'isActive' => $department->is_active,
+                ->map(fn (OrganizationalUnit $organizationalUnit): array => [
+                    'id' => $organizationalUnit->id,
+                    'name' => $organizationalUnit->name,
+                    'code' => $organizationalUnit->code,
+                    'isActive' => $organizationalUnit->is_active,
                 ]),
             'targetOperators' => TargetOperator::options(),
+            'reportingPeriods' => $reportingPeriods
+                ->map(fn (ReportingPeriod $reportingPeriod): array => [
+                    ...$reportingPeriod->only(['id', 'name', 'code', 'sequence', 'starts_on', 'ends_on']),
+                    'startsOn' => $reportingPeriod->starts_on?->toDateString(),
+                    'endsOn' => $reportingPeriod->ends_on?->toDateString(),
+                    'status' => $reportingPeriod->status->value,
+                    'acceptsSubmissions' => $reportingPeriod->acceptsSubmissions(),
+                ])
+                ->values(),
+            'selectedReportingPeriod' => $selectedReportingPeriod
+                ? [
+                    'id' => $selectedReportingPeriod->id,
+                    'name' => $selectedReportingPeriod->name,
+                    'code' => $selectedReportingPeriod->code,
+                    'sequence' => $selectedReportingPeriod->sequence,
+                    'startsOn' => $selectedReportingPeriod->starts_on?->toDateString(),
+                    'endsOn' => $selectedReportingPeriod->ends_on?->toDateString(),
+                    'status' => $selectedReportingPeriod->status->value,
+                    'acceptsSubmissions' => $selectedReportingPeriod->acceptsSubmissions(),
+                ]
+                : null,
+            'review' => OperationalPlanReviewData::forPlan($operationalPlan, $actor),
+            'remarkOptions' => [
+                'categories' => array_map(fn (RemarkCategory $category): string => $category->value, RemarkCategory::cases()),
+                'fields' => array_map(
+                    fn (RemarkField $field): string => $field->value,
+                    array_filter(
+                        RemarkField::cases(),
+                        fn (RemarkField $field): bool => ! in_array($field, [RemarkField::AccomplishmentText, RemarkField::Evidence, RemarkField::Evaluation], true),
+                    ),
+                ),
+            ],
         ]);
     }
 
@@ -120,16 +164,13 @@ class OperationalPlanController extends Controller
         $operationalPlans = OperationalPlan::query()
             ->with([
                 'academicYear:id,name,status,is_current,start_year,end_year',
-                'department:id,name,code',
+                'organizationalUnit:id,name,code',
                 'accountableUser:id,name',
                 'statusHistories:id,operational_plan_id,actor_id,from_status,to_status,remarks,created_at',
             ])
             ->withCount(['keyResultAreas', 'planItems'])
             ->whereBelongsTo($academicYear)
-            ->when(
-                $user->isDepartmentUser(),
-                fn (Builder $query): Builder => $query->where('department_id', $user->department_id),
-            )
+            ->whereIn('organizational_unit_id', $this->scope->visibleUnitIds($user))
             ->latest('updated_at')
             ->get()
             ->map(fn (OperationalPlan $operationalPlan): array => OperationalPlanData::summary($operationalPlan))
@@ -139,70 +180,86 @@ class OperationalPlanController extends Controller
     }
 
     /** @return list<array{id: int, name: string, code: string|null}> */
-    private function targetDepartments(AcademicYear $academicYear, User $user): array
+    private function targetOrganizationalUnits(AcademicYear $academicYear, User $user): array
     {
         if (! $academicYear->isOpen()) {
             return [];
         }
 
-        $plannedDepartmentIds = OperationalPlan::query()
+        $plannedOrganizationalUnitIds = OperationalPlan::query()
             ->whereBelongsTo($academicYear)
-            ->pluck('department_id');
+            ->pluck('organizational_unit_id');
 
-        $departments = Department::query()
+        $organizationalUnits = OrganizationalUnit::query()
             ->select(['id', 'name', 'code'])
             ->where('is_active', true)
-            ->whereNotIn('id', $plannedDepartmentIds)
-            ->when(
-                $user->isDepartmentUser(),
-                fn (Builder $query): Builder => $query->whereKey($user->department_id),
-            )
-            ->when(
-                ! $user->isSuperAdmin() && ! $user->isDepartmentUser(),
-                fn (Builder $query): Builder => $query->whereKey(-1),
-            )
+            ->whereNotIn('id', $plannedOrganizationalUnitIds)
+            ->whereKey($this->scope->manageableUnitIds($user))
             ->orderBy('name')
             ->get()
-            ->map(fn (Department $department): array => [
-                'id' => $department->id,
-                'name' => $department->name,
-                'code' => $department->code,
+            ->map(fn (OrganizationalUnit $organizationalUnit): array => [
+                'id' => $organizationalUnit->id,
+                'name' => $organizationalUnit->name,
+                'code' => $organizationalUnit->code,
             ])
             ->all();
 
-        return array_values($departments);
+        return array_values($organizationalUnits);
     }
 
-    /** @return list<array{id: int, name: string, departmentId: int}> */
+    /** @return list<array{id: int, name: string, organizationalUnitId: int}> */
     private function accountableUsers(AcademicYear $academicYear, User $user): array
     {
-        $departmentIds = collect($this->targetDepartments($academicYear, $user))->pluck('id');
+        $organizationalUnitIds = array_column($this->targetOrganizationalUnits($academicYear, $user), 'id');
 
-        $accountableUsers = User::query()
-            ->select(['id', 'name', 'department_id'])
-            ->whereNotNull('department_id')
-            ->whereIn('department_id', $departmentIds)
-            ->orderBy('name')
-            ->get()
-            ->map(fn (User $accountableUser): array => [
-                'id' => $accountableUser->id,
-                'name' => $accountableUser->name,
-                'departmentId' => (int) $accountableUser->department_id,
-            ])
-            ->all();
-
-        return array_values($accountableUsers);
+        return $this->accountableUsersForUnits($organizationalUnitIds);
     }
 
-    private function loadDetail(OperationalPlan $operationalPlan): OperationalPlan
+    /** @param list<int> $unitIds
+     * @return list<array{id: int, name: string, organizationalUnitId: int}>
+     */
+    private function accountableUsersForUnits(array $unitIds): array
+    {
+        return array_values(User::query()
+            ->whereHas('organizationalUnitAssignments', fn (Builder $query): Builder => $query->whereIn('organizational_unit_id', $unitIds))
+            ->orderBy('name')->get()
+            ->flatMap(fn (User $user): array => array_map(
+                fn (int $unitId): array => ['id' => $user->id, 'name' => $user->name, 'organizationalUnitId' => $unitId],
+                array_values(array_intersect($unitIds, $this->scope->assignedUnitIds($user))),
+            ))->values()->all());
+    }
+
+    /** @param Collection<int, ReportingPeriod> $reportingPeriods */
+    private function selectedReportingPeriod(Request $request, Collection $reportingPeriods): ?ReportingPeriod
+    {
+        if ($request->query->has('reporting_period')) {
+            $reportingPeriodId = $request->query('reporting_period');
+            abort_unless(is_string($reportingPeriodId) && ctype_digit($reportingPeriodId), 404);
+
+            return $reportingPeriods->firstOrFail(fn (ReportingPeriod $reportingPeriod): bool => $reportingPeriod->id === (int) $reportingPeriodId);
+        }
+
+        return $reportingPeriods->first(fn (ReportingPeriod $reportingPeriod): bool => $reportingPeriod->acceptsSubmissions())
+            ?? $reportingPeriods->first();
+    }
+
+    private function loadDetail(OperationalPlan $operationalPlan, ?ReportingPeriod $reportingPeriod): OperationalPlan
     {
         return $operationalPlan
             ->load([
                 'academicYear:id,name,status,is_current,start_year,end_year',
-                'department:id,name,code',
+                'organizationalUnit:id,name,code',
                 'accountableUser:id,name',
-                'keyResultAreas.planItems.coAccountableDepartments:id,name,code',
+                'keyResultAreas.planItems.coAccountableOrganizationalUnits:id,name,code',
+                'keyResultAreas.planItems.accomplishments' => function (Relation $relation) use ($reportingPeriod): void {
+                    if ($reportingPeriod instanceof ReportingPeriod) {
+                        $relation->whereBelongsTo($reportingPeriod);
+                    }
+                },
                 'statusHistories.actor:id,name',
+                'remarks.remarkable',
+                'remarks.reportingPeriod:id,name',
+                'remarks.author.organizationalUnitAssignments.organizationalUnit:id,type',
             ])
             ->loadCount(['keyResultAreas', 'planItems']);
     }
@@ -218,8 +275,11 @@ class OperationalPlanController extends Controller
             'closePlan' => Gate::forUser($user)->allows('close', $operationalPlan),
             'reopenPlan' => Gate::forUser($user)->allows('reopen', $operationalPlan),
             'createKeyResultArea' => Gate::forUser($user)->allows('create', [KeyResultArea::class, $operationalPlan]),
+            'updateKeyResultArea' => $operationalPlan->keyResultAreas->every(fn (KeyResultArea $keyResultArea): bool => Gate::forUser($user)->allows('update', $keyResultArea)),
+            'deleteKeyResultArea' => Gate::forUser($user)->allows('delete', $operationalPlan->keyResultAreas->first() ?? new KeyResultArea(['operational_plan_id' => $operationalPlan->id])),
             'reorderKeyResultAreas' => Gate::forUser($user)->allows('reorder', [KeyResultArea::class, $operationalPlan]),
             'viewOfficial' => Gate::forUser($user)->allows('view', $operationalPlan),
+            'createRemark' => Gate::forUser($user)->allows('create', [Remark::class, $operationalPlan]),
         ];
     }
 }

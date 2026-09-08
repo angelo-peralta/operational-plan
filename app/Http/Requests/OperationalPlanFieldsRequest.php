@@ -68,22 +68,21 @@ abstract class OperationalPlanFieldsRequest extends PlanningRequest
                     return;
                 }
 
-                $departmentId = $this->planningDepartmentId();
+                $organizationalUnitId = $this->planningOrganizationalUnitId();
 
-                if ($departmentId === null || ! User::query()
-                    ->whereKey($this->integer('accountable_user_id'))
-                    ->where('department_id', $departmentId)
-                    ->exists()) {
+                $accountable = User::query()->find($this->integer('accountable_user_id'));
+
+                if ($organizationalUnitId === null || $accountable === null || ! in_array($organizationalUnitId, $this->organizationalScope()->assignedUnitIds($accountable), true)) {
                     $validator->errors()->add(
                         'accountable_user_id',
-                        __('The accountable user must belong to the plan department.'),
+                        __('The accountable user must belong to the plan organizational unit.'),
                     );
                 }
             },
         ];
     }
 
-    abstract protected function planningDepartmentId(): ?int;
+    abstract protected function planningOrganizationalUnitId(): ?int;
 
     protected function prepareForValidation(): void
     {

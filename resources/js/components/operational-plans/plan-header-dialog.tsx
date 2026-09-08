@@ -24,7 +24,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { update } from '@/routes/operational-plans';
-import type { DepartmentAccountableUser, OperationalPlan } from '@/types';
+import type { AccountableUserOption, OperationalPlan } from '@/types';
 
 export function PlanHeaderDialog({
     teamSlug,
@@ -33,7 +33,7 @@ export function PlanHeaderDialog({
 }: {
     teamSlug: string;
     operationalPlan: OperationalPlan;
-    accountableUsers: DepartmentAccountableUser[];
+    accountableUsers: AccountableUserOption[];
 }) {
     const [open, setOpen] = useState(false);
     const [accountableUserId, setAccountableUserId] = useState(
@@ -64,8 +64,8 @@ export function PlanHeaderDialog({
                     <DialogTitle>Edit Operational Plan details</DialogTitle>
                     <DialogDescription>
                         Update the accountable person and institutional goal.
-                        Academic Year and department ownership cannot be
-                        changed.
+                        Academic Year and organizational unit ownership cannot
+                        be changed.
                     </DialogDescription>
                 </DialogHeader>
 

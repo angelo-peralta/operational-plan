@@ -30,7 +30,7 @@ import {
     update as updatePlanItem,
 } from '@/routes/operational-plans/key-result-areas/plan-items';
 import type {
-    CoAccountableDepartment,
+    CoAccountableOrganizationalUnit,
     PlanItem,
     SelectOption,
     TargetOperator,
@@ -42,7 +42,7 @@ type Props = {
     operationalPlanId: number;
     keyResultAreaId: number;
     item?: PlanItem;
-    departments: CoAccountableDepartment[];
+    organizationalUnits: CoAccountableOrganizationalUnit[];
     targetOperators: SelectOption<TargetOperator>[];
     trigger: ReactNode;
 };
@@ -150,7 +150,7 @@ export function PlanItemDialog({
     operationalPlanId,
     keyResultAreaId,
     item,
-    departments,
+    organizationalUnits,
     targetOperators,
     trigger,
 }: Props) {
@@ -158,9 +158,12 @@ export function PlanItemDialog({
     const [targetOperator, setTargetOperator] = useState<
         TargetOperator | 'none'
     >(item?.targetOperator ?? 'none');
-    const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<
-        number[]
-    >(item?.coAccountableDepartments.map((department) => department.id) ?? []);
+    const [selectedOrganizationalUnitIds, setSelectedOrganizationalUnitIds] =
+        useState<number[]>(
+            item?.coAccountableOrganizationalUnits.map(
+                (organizationalUnit) => organizationalUnit.id,
+            ) ?? [],
+        );
     const [evidenceRequirements, setEvidenceRequirements] = useState<string[]>(
         initialList(item?.documentaryEvidenceRequirements),
     );
@@ -170,9 +173,10 @@ export function PlanItemDialog({
 
     const resetEditorState = (): void => {
         setTargetOperator(item?.targetOperator ?? 'none');
-        setSelectedDepartmentIds(
-            item?.coAccountableDepartments.map((department) => department.id) ??
-                [],
+        setSelectedOrganizationalUnitIds(
+            item?.coAccountableOrganizationalUnits.map(
+                (organizationalUnit) => organizationalUnit.id,
+            ) ?? [],
         );
         setEvidenceRequirements(
             initialList(item?.documentaryEvidenceRequirements),
@@ -391,84 +395,92 @@ export function PlanItemDialog({
                                         </legend>
                                     </Label>
                                     <p className="text-xs leading-5 text-muted-foreground">
-                                        Prefer registered departments. Use the
-                                        manual list below only for units not yet
-                                        registered.
+                                        Prefer registered organizational units.
+                                        Use the manual list below only for units
+                                        not yet registered.
                                     </p>
                                 </div>
-                                {selectedDepartmentIds.map((departmentId) => (
-                                    <input
-                                        key={departmentId}
-                                        type="hidden"
-                                        name="co_accountable_department_ids[]"
-                                        value={departmentId}
-                                    />
-                                ))}
+                                {selectedOrganizationalUnitIds.map(
+                                    (organizationalUnitId) => (
+                                        <input
+                                            key={organizationalUnitId}
+                                            type="hidden"
+                                            name="co_accountable_organizational_unit_ids[]"
+                                            value={organizationalUnitId}
+                                        />
+                                    ),
+                                )}
                                 <InputError
                                     message={
-                                        errors.co_accountable_department_ids
+                                        errors.co_accountable_organizational_unit_ids
                                     }
                                 />
                                 <div className="grid gap-2 sm:grid-cols-2">
-                                    {departments.map((department) => {
-                                        const selected =
-                                            selectedDepartmentIds.includes(
-                                                department.id,
-                                            );
+                                    {organizationalUnits.map(
+                                        (organizationalUnit) => {
+                                            const selected =
+                                                selectedOrganizationalUnitIds.includes(
+                                                    organizationalUnit.id,
+                                                );
 
-                                        return (
-                                            <div
-                                                key={department.id}
-                                                className="flex items-start gap-3 rounded-lg border bg-background p-3"
-                                            >
-                                                <Checkbox
-                                                    id={`${idPrefix}-department-${department.id}`}
-                                                    checked={selected}
-                                                    disabled={
-                                                        !department.isActive &&
-                                                        !selected
-                                                    }
-                                                    onCheckedChange={(
-                                                        checked,
-                                                    ) =>
-                                                        setSelectedDepartmentIds(
-                                                            checked === true
-                                                                ? [
-                                                                      ...selectedDepartmentIds,
-                                                                      department.id,
-                                                                  ]
-                                                                : selectedDepartmentIds.filter(
-                                                                      (id) =>
-                                                                          id !==
-                                                                          department.id,
-                                                                  ),
-                                                        )
-                                                    }
-                                                />
-                                                <Label
-                                                    htmlFor={`${idPrefix}-department-${department.id}`}
-                                                    className="min-w-0 font-normal"
+                                            return (
+                                                <div
+                                                    key={organizationalUnit.id}
+                                                    className="flex items-start gap-3 rounded-lg border bg-background p-3"
                                                 >
-                                                    <span className="block font-medium">
-                                                        {department.name}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {department.code ??
-                                                            'No code'}
-                                                        {!department.isActive &&
-                                                            ' · Inactive'}
-                                                    </span>
-                                                </Label>
-                                            </div>
-                                        );
-                                    })}
+                                                    <Checkbox
+                                                        id={`${idPrefix}-organizational-unit-${organizationalUnit.id}`}
+                                                        checked={selected}
+                                                        disabled={
+                                                            !organizationalUnit.isActive &&
+                                                            !selected
+                                                        }
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            setSelectedOrganizationalUnitIds(
+                                                                checked === true
+                                                                    ? [
+                                                                          ...selectedOrganizationalUnitIds,
+                                                                          organizationalUnit.id,
+                                                                      ]
+                                                                    : selectedOrganizationalUnitIds.filter(
+                                                                          (
+                                                                              id,
+                                                                          ) =>
+                                                                              id !==
+                                                                              organizationalUnit.id,
+                                                                      ),
+                                                            )
+                                                        }
+                                                    />
+                                                    <Label
+                                                        htmlFor={`${idPrefix}-organizational-unit-${organizationalUnit.id}`}
+                                                        className="min-w-0 font-normal"
+                                                    >
+                                                        <span className="block font-medium">
+                                                            {
+                                                                organizationalUnit.name
+                                                            }
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {organizationalUnit.code ??
+                                                                'No code'}
+                                                            {!organizationalUnit.isActive &&
+                                                                ' · Inactive'}
+                                                        </span>
+                                                    </Label>
+                                                </div>
+                                            );
+                                        },
+                                    )}
                                 </div>
                             </fieldset>
 
                             <StringListFields
                                 idPrefix={`${idPrefix}-manual-unit`}
                                 label="Manual co-accountable units"
-                                description="Temporary text fallback for units that do not exist in the department directory."
+                                description="Temporary text fallback for units that do not exist in the organizational unit directory."
                                 fieldName="manual_co_accountable_units"
                                 values={manualUnits}
                                 errors={errors}

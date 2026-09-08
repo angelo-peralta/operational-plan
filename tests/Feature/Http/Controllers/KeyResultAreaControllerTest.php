@@ -5,20 +5,21 @@ use App\Models\AcademicYear;
 use App\Models\Department;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
+use App\Models\PlanItem;
 use App\Models\User;
 
-test('department users append a normalized key result area to an editable plan', function () {
+test('super administrators append a normalized key result area to a plan', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $administrator = User::factory()->superAdmin()->create();
     $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
     KeyResultArea::factory()->for($operationalPlan)->create(['sort_order' => 1]);
 
     $response = $this
-        ->actingAs($departmentUser)
+        ->actingAs($administrator)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.key-result-areas.store', [
-            'current_team' => $departmentUser->currentTeam,
+            'current_team' => $administrator->currentTeam,
             'operational_plan' => $operationalPlan,
         ]), [
             'code' => '  KRA   2 ',
@@ -33,22 +34,22 @@ test('department users append a normalized key result area to an editable plan',
         'name' => 'Community Engagement',
         'description' => 'Improve external partnerships.',
         'sort_order' => 2,
-        'created_by' => $departmentUser->id,
-        'updated_by' => $departmentUser->id,
+        'created_by' => $administrator->id,
+        'updated_by' => $administrator->id,
     ]);
 });
 
 test('key result area creation rejects parent ordering and audit attributes from the client', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $administrator = User::factory()->superAdmin()->create();
     $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
 
     $response = $this
-        ->actingAs($departmentUser)
+        ->actingAs($administrator)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.key-result-areas.store', [
-            'current_team' => $departmentUser->currentTeam,
+            'current_team' => $administrator->currentTeam,
             'operational_plan' => $operationalPlan,
         ]), [
             'name' => 'Unauthorized KRA',
@@ -91,19 +92,19 @@ test('key result area updates return 404 for a KRA from another plan', function 
     expect($otherKeyResultArea->fresh()->name)->toBe('Other plan KRA');
 });
 
-test('department users can reorder every KRA in their editable plan', function () {
+test('super administrators can reorder every KRA in a plan', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $administrator = User::factory()->superAdmin()->create();
     $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
     $firstKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create(['sort_order' => 1]);
     $secondKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create(['sort_order' => 2]);
 
     $response = $this
-        ->actingAs($departmentUser)
+        ->actingAs($administrator)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->patch(route('operational-plans.key-result-areas.reorder', [
-            'current_team' => $departmentUser->currentTeam,
+            'current_team' => $administrator->currentTeam,
             'operational_plan' => $operationalPlan,
         ]), [
             'ordered_ids' => [$secondKeyResultArea->id, $firstKeyResultArea->id],
@@ -112,25 +113,25 @@ test('department users can reorder every KRA in their editable plan', function (
     $response->assertSessionHasNoErrors()->assertRedirect();
     expect($firstKeyResultArea->fresh())
         ->sort_order->toBe(2)
-        ->updated_by->toBe($departmentUser->id)
+        ->updated_by->toBe($administrator->id)
         ->and($secondKeyResultArea->fresh())
         ->sort_order->toBe(1)
-        ->updated_by->toBe($departmentUser->id);
+        ->updated_by->toBe($administrator->id);
 });
 
 test('KRA reorder rejects an incomplete ordering without changing positions', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $administrator = User::factory()->superAdmin()->create();
     $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
     $firstKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create(['sort_order' => 1]);
     $secondKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create(['sort_order' => 2]);
 
     $response = $this
-        ->actingAs($departmentUser)
+        ->actingAs($administrator)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->patch(route('operational-plans.key-result-areas.reorder', [
-            'current_team' => $departmentUser->currentTeam,
+            'current_team' => $administrator->currentTeam,
             'operational_plan' => $operationalPlan,
         ]), [
             'ordered_ids' => [$secondKeyResultArea->id],
@@ -149,7 +150,7 @@ test('reviewers cannot add KRAs to source plans', function () {
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)
@@ -163,6 +164,57 @@ test('reviewers cannot add KRAs to source plans', function () {
 
     $response->assertForbidden();
     $this->assertDatabaseEmpty('key_result_areas');
+});
+
+test('department users cannot manage the KRA template', function () {
+    $academicYear = AcademicYear::factory()->open()->create();
+    $department = Department::factory()->create();
+    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
+
+    $response = $this
+        ->actingAs($departmentUser)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->delete(route('operational-plans.key-result-areas.destroy', [
+            'current_team' => $departmentUser->currentTeam,
+            'operational_plan' => $operationalPlan,
+            'key_result_area' => $keyResultArea,
+        ]));
+
+    $response->assertForbidden();
+    expect($keyResultArea->fresh())->not->toBeNull();
+});
+
+test('super administrators can delete an empty KRA but not one containing plan items', function () {
+    $academicYear = AcademicYear::factory()->open()->create();
+    $administrator = User::factory()->superAdmin()->create();
+    $operationalPlan = OperationalPlan::factory()
+        ->for($academicYear, 'academicYear')
+        ->for(Department::factory())
+        ->create();
+    $emptyKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
+    $occupiedKeyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
+    PlanItem::factory()->for($occupiedKeyResultArea)->create();
+
+    $parameters = fn (KeyResultArea $keyResultArea): array => [
+        'current_team' => $administrator->currentTeam,
+        'operational_plan' => $operationalPlan,
+        'key_result_area' => $keyResultArea,
+    ];
+
+    $this->actingAs($administrator)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->delete(route('operational-plans.key-result-areas.destroy', $parameters($emptyKeyResultArea)))
+        ->assertRedirect();
+
+    $this->actingAs($administrator)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->delete(route('operational-plans.key-result-areas.destroy', $parameters($occupiedKeyResultArea)))
+        ->assertSessionHasErrors('key_result_area');
+
+    expect($emptyKeyResultArea->fresh())->toBeNull()
+        ->and($occupiedKeyResultArea->fresh())->not->toBeNull();
 });
 
 test('submitted and closed-year plans forbid KRA edits', function () {

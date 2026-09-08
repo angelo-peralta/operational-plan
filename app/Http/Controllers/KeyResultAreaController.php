@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\KeyResultAreas\CreateKeyResultArea;
+use App\Actions\KeyResultAreas\DeleteKeyResultArea;
 use App\Actions\KeyResultAreas\ReorderKeyResultAreas;
 use App\Actions\KeyResultAreas\UpdateKeyResultArea;
+use App\Http\Requests\DeleteKeyResultAreaRequest;
 use App\Http\Requests\ReorderKeyResultAreasRequest;
 use App\Http\Requests\StoreKeyResultAreaRequest;
 use App\Http\Requests\UpdateKeyResultAreaRequest;
@@ -67,6 +69,21 @@ class KeyResultAreaController extends Controller
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('KRA order updated.')]);
+
+        return back();
+    }
+
+    public function destroy(
+        DeleteKeyResultAreaRequest $request,
+        string $currentTeam,
+        DeleteKeyResultArea $deleteKeyResultArea,
+    ): RedirectResponse {
+        $actor = $request->user();
+        assert($actor instanceof User);
+
+        $deleteKeyResultArea->handle($request->keyResultArea(), $actor);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Key Result Area removed.')]);
 
         return back();
     }

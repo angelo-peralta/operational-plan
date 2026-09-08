@@ -41,10 +41,10 @@ test('department users see only their plan in the selected academic year', funct
         ->has('operationalPlans', 1)
         ->where('operationalPlans.0.id', $ownPlan->id)
         ->where('operationalPlans.0.goal', 'Selected year goal')
-        ->has('targetDepartments', 0));
+        ->has('targetOrganizationalUnits', 0));
 });
 
-test('reviewers see every department plan only in the selected academic year', function () {
+test('root executives see subordinate plans only in the selected academic year', function () {
     $this->withoutVite();
 
     $selectedAcademicYear = AcademicYear::factory()->open()->create();
@@ -57,11 +57,13 @@ test('reviewers see every department plan only in the selected academic year', f
         ->for($selectedAcademicYear, 'academicYear')
         ->for(Department::factory())
         ->create();
+    $availableOrganizationalUnit = Department::factory()->create();
     OperationalPlan::factory()
         ->for($otherAcademicYear, 'academicYear')
-        ->for(Department::factory())
+        ->for($availableOrganizationalUnit)
         ->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver(...Department::query()->get()->all())->create();
+    $executiveAuthorityId = $reviewer->organizationalUnitAssignments()->sole()->organizational_unit_id;
 
     $response = $this
         ->actingAs($reviewer)
@@ -72,7 +74,10 @@ test('reviewers see every department plan only in the selected academic year', f
         ->component('operational-plans/index')
         ->has('operationalPlans', 2)
         ->where('operationalPlans', fn (Collection $plans): bool => $plans->pluck('id')->sort()->values()->all() === collect([$firstPlan->id, $secondPlan->id])->sort()->values()->all())
-        ->has('targetDepartments', 0));
+        ->has('targetOrganizationalUnits', 1)
+        ->where('targetOrganizationalUnits.0.id', $executiveAuthorityId)
+        ->where('accountableUsers.0.organizationalUnitId', $executiveAuthorityId)
+        ->missing('accountableUsers.0.departmentId'));
 });
 
 test('department users receive 404 for another department plan', function () {
@@ -125,6 +130,7 @@ test('department users create a draft plan in their department and selected acad
         ->actingAs($departmentUser)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.store', ['current_team' => $departmentUser->currentTeam]), [
+            'organizational_unit_id' => $department->id,
             'accountable_user_id' => $departmentUser->id,
             'accountable_name' => 'Department Planner',
             'accountable_position' => 'Planning Coordinator',
@@ -140,7 +146,7 @@ test('department users create a draft plan in their department and selected acad
         ]);
     expect($operationalPlan)
         ->academic_year_id->toBe($academicYear->id)
-        ->department_id->toBe($department->id)
+        ->organizational_unit_id->toBe($department->id)
         ->status->toBe(OperationalPlanStatus::Draft)
         ->created_by->toBe($departmentUser->id)
         ->updated_by->toBe($departmentUser->id);
@@ -153,7 +159,7 @@ test('department users create a draft plan in their department and selected acad
     $history = OperationalPlanStatusHistory::query()->sole();
     expect($history->snapshot)
         ->toHaveKey('academic_year.id', $academicYear->id)
-        ->toHaveKey('department.id', $department->id)
+        ->toHaveKey('organizational_unit.id', $department->id)
         ->toHaveKey('goal', 'Improve operational effectiveness.');
 });
 
@@ -167,7 +173,7 @@ test('super administrators create a plan for the selected active department', fu
         ->actingAs($administrator)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.store', ['current_team' => $administrator->currentTeam]), [
-            'department_id' => $department->id,
+            'organizational_unit_id' => $department->id,
             'accountable_user_id' => $accountableUser->id,
             'accountable_name' => $accountableUser->name,
             'accountable_position' => 'Director',
@@ -177,7 +183,7 @@ test('super administrators create a plan for the selected active department', fu
     $response->assertSessionHasNoErrors()->assertRedirect();
     $this->assertDatabaseHas('operational_plans', [
         'academic_year_id' => $academicYear->id,
-        'department_id' => $department->id,
+        'organizational_unit_id' => $department->id,
         'accountable_user_id' => $accountableUser->id,
         'status' => OperationalPlanStatus::Draft->value,
         'created_by' => $administrator->id,
@@ -196,7 +202,7 @@ test('plan creation rejects client controlled scope workflow and audit fields', 
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.store', ['current_team' => $departmentUser->currentTeam]), [
             'academic_year_id' => $otherAcademicYear->id,
-            'department_id' => $otherDepartment->id,
+            'organizational_unit_id' => $otherDepartment->id,
             'status' => OperationalPlanStatus::Approved->value,
             'created_by' => User::factory()->superAdmin()->create()->id,
             'submitted_at' => now()->toISOString(),
@@ -206,7 +212,7 @@ test('plan creation rejects client controlled scope workflow and audit fields', 
 
     $response->assertSessionHasErrors([
         'academic_year_id',
-        'department_id',
+        'organizational_unit_id',
         'status',
         'created_by',
         'submitted_at',
@@ -224,12 +230,13 @@ test('plan creation rejects duplicate department and academic year ownership', f
         ->actingAs($departmentUser)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
         ->post(route('operational-plans.store', ['current_team' => $departmentUser->currentTeam]), [
+            'organizational_unit_id' => $department->id,
             'accountable_name' => 'Planner',
             'goal' => 'Duplicate plan.',
         ]);
 
     $response->assertSessionHasErrors([
-        'department_id' => 'This department already has an Operational Plan for the selected Academic Year.',
+        'organizational_unit_id' => 'This organizational unit already has an Operational Plan for the selected Academic Year.',
     ]);
     $this->assertDatabaseCount('operational_plans', 1);
 });
@@ -288,7 +295,7 @@ test('plan updates require an accountable user from the owning department', func
         ]);
 
     $response->assertSessionHasErrors([
-        'accountable_user_id' => 'The accountable user must belong to the plan department.',
+        'accountable_user_id' => 'The accountable user must belong to the plan organizational unit.',
     ]);
     expect($operationalPlan->fresh()->goal)->toBe('Original goal');
 });

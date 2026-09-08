@@ -17,11 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import type {
-    Accomplishment,
-    MonitoringPlanItem,
-    MonitoringReportingPeriod,
-} from '@/types';
 import { store } from '@/routes/monitoring/accomplishments/evidence';
 
 export function EvidenceUploadDialog({
@@ -32,9 +27,9 @@ export function EvidenceUploadDialog({
     trigger,
 }: {
     teamSlug: string;
-    reportingPeriod: MonitoringReportingPeriod;
-    planItem: MonitoringPlanItem;
-    accomplishment: Accomplishment;
+    reportingPeriod: { id: number };
+    planItem: { id: number };
+    accomplishment: { id: number };
     trigger: ReactNode;
 }) {
     const [open, setOpen] = useState(false);

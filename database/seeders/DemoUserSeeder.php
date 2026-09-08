@@ -3,102 +3,47 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
-use App\Models\Department;
+use App\Models\OrganizationalUnit;
+use App\Models\Role;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DemoUserSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         if (! app()->environment(['local', 'testing'])) {
             return;
         }
 
-        $planningOffice = Department::query()->where('code', 'PLAN')->firstOrFail();
-        $department = Department::query()->where('code', 'CPRINT')->firstOrFail();
+        $accounts = [
+            ['Demo System Admin', 'superadmin@example.com', UserRole::SystemAdmin, null, null],
+            ['Demo President', 'president@example.com', UserRole::Executive, 'SPUP', 'University President'],
+            ['Demo VP Academic', 'vp.academic@example.com', UserRole::Executive, 'ACADEMIC', 'Vice President for Academic Affairs'],
+            ['Demo VP Administration', 'vp.admin@example.com', UserRole::Executive, 'ADMIN', 'Vice President for Administration'],
+            ['Demo SITE Dean', 'dean@example.com', UserRole::OfficeHead, 'SITE', 'School Dean'],
+            ['Demo SITE Secretary', 'staff@example.com', UserRole::Staff, 'SITE', 'Secretary'],
+            ['Demo CPRINT Staff', 'department@example.com', UserRole::Staff, 'CPRINT', 'Administrative Assistant'],
+        ];
+        $created = [];
 
-        $createdAccounts = [];
-
-        if ($this->seedDemoUser(
-            name: 'Demo Super Admin',
-            email: 'superadmin@example.com',
-            role: UserRole::SuperAdmin,
-        )) {
-            $createdAccounts[] = ['Super Admin', 'superadmin@example.com', 'password'];
+        foreach ($accounts as [$name, $email, $role, $unitCode, $title]) {
+            if (User::query()->where('email', $email)->exists()) {
+                continue;
+            }
+            $factory = User::factory()->forOperationalRole(Role::systemFor($role));
+            if ($unitCode !== null) {
+                $unit = OrganizationalUnit::query()->where('code', $unitCode)->firstOrFail();
+                $factory = $factory->assignedToUnit($unit);
+            }
+            $user = $factory->create(['name' => $name, 'email' => $email, 'password' => 'password']);
+            $user->organizationalUnitAssignments()->update(['position_title' => $title]);
+            $created[] = [$role->label(), $email, 'password'];
         }
 
-        if ($this->seedDemoUser(
-            name: 'Demo Reviewer',
-            email: 'reviewer@example.com',
-            role: UserRole::Reviewer,
-            department: $planningOffice,
-        )) {
-            $createdAccounts[] = ['Reviewer', 'reviewer@example.com', 'password'];
+        if ($created !== []) {
+            $this->command->warn('Development/demo credentials only. Existing accounts and passwords are preserved.');
+            $this->command->table(['Role', 'Email', 'Password'], $created);
         }
-
-        if ($this->seedDemoUser(
-            name: 'Demo Department User',
-            email: 'department@example.com',
-            role: UserRole::DepartmentUser,
-            department: $department,
-        )) {
-            $createdAccounts[] = ['Department User', 'department@example.com', 'password'];
-        }
-
-        if ($createdAccounts === []) {
-            $this->command->info('Development/demo accounts already exist; no credentials were changed.');
-
-            return;
-        }
-
-        $this->command->newLine();
-        $this->command->warn('Development/demo accounts only');
-        $this->command->table(
-            ['Role', 'Email', 'Password'],
-            $createdAccounts,
-        );
-    }
-
-    /**
-     * Create or refresh a local demo account.
-     */
-    private function seedDemoUser(
-        string $name,
-        string $email,
-        UserRole $role,
-        ?Department $department = null,
-    ): bool {
-        $user = User::query()->where('email', $email)->first();
-
-        if ($user !== null) {
-            return false;
-        }
-
-        $factory = match ($role) {
-            UserRole::SuperAdmin => User::factory()->superAdmin(),
-            UserRole::Reviewer => User::factory()->reviewer(),
-            UserRole::DepartmentUser => User::factory()->departmentUser(),
-        };
-
-        if ($department !== null) {
-            $factory = $factory->forDepartment($department);
-        }
-
-        $factory->create([
-            'name' => $name,
-            'email' => $email,
-            'email_verified_at' => now(),
-            'password' => Hash::make('password'),
-        ]);
-
-        return true;
     }
 }

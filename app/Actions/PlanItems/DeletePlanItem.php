@@ -39,6 +39,12 @@ class DeletePlanItem
                 ]);
             }
 
+            if ($lockedPlanItem->remarks()->exists()) {
+                throw ValidationException::withMessages([
+                    'plan_item' => __('Plan Items with review remarks cannot be removed.'),
+                ]);
+            }
+
             $lockedPlanItem->delete();
         });
     }

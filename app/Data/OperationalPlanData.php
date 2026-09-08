@@ -3,11 +3,16 @@
 namespace App\Data;
 
 use App\Enums\OperationalPlanStatus;
-use App\Models\Department;
+use App\Models\Accomplishment;
+use App\Models\Evidence;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
 use App\Models\OperationalPlanStatusHistory;
+use App\Models\OrganizationalUnit;
 use App\Models\PlanItem;
+use App\Models\ReportingPeriod;
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 
 class OperationalPlanData
 {
@@ -24,7 +29,7 @@ class OperationalPlanData
                 'startYear' => $operationalPlan->academicYear->start_year,
                 'endYear' => $operationalPlan->academicYear->end_year,
             ],
-            'department' => self::department($operationalPlan->department),
+            'organizationalUnit' => self::organizationalUnit($operationalPlan->organizationalUnit),
             'accountableUser' => $operationalPlan->accountableUser ? [
                 'id' => $operationalPlan->accountableUser->id,
                 'name' => $operationalPlan->accountableUser->name,
@@ -45,8 +50,11 @@ class OperationalPlanData
     }
 
     /** @return array<string, mixed> */
-    public static function detail(OperationalPlan $operationalPlan): array
-    {
+    public static function detail(
+        OperationalPlan $operationalPlan,
+        ?ReportingPeriod $reportingPeriod = null,
+        ?User $user = null,
+    ): array {
         return [
             ...self::summary($operationalPlan),
             'keyResultAreas' => $operationalPlan->keyResultAreas
@@ -57,7 +65,7 @@ class OperationalPlanData
                     'description' => $keyResultArea->description,
                     'sortOrder' => $keyResultArea->sort_order,
                     'planItems' => $keyResultArea->planItems
-                        ->map(fn (PlanItem $planItem): array => self::planItem($planItem))
+                        ->map(fn (PlanItem $planItem): array => self::planItem($planItem, $reportingPeriod, $user))
                         ->values(),
                 ])
                 ->values(),
@@ -67,6 +75,9 @@ class OperationalPlanData
                     'fromStatus' => $history->from_status?->value,
                     'toStatus' => $history->to_status->value,
                     'toStatusLabel' => $history->to_status->label(),
+                    'action' => $history->action ?? self::historyAction($history),
+                    'actorRole' => $history->actor_role,
+                    'actorOrganizationalUnitIds' => $history->actor_organizational_unit_ids ?? [],
                     'remarks' => $history->remarks,
                     'actor' => [
                         'id' => $history->actor->id,
@@ -79,8 +90,18 @@ class OperationalPlanData
     }
 
     /** @return array<string, mixed> */
-    private static function planItem(PlanItem $planItem): array
-    {
+    private static function planItem(
+        PlanItem $planItem,
+        ?ReportingPeriod $reportingPeriod,
+        ?User $user,
+    ): array {
+        $accomplishment = $planItem->accomplishments->first();
+
+        if ($accomplishment instanceof Accomplishment && $reportingPeriod instanceof ReportingPeriod) {
+            $accomplishment->setRelation('planItem', $planItem);
+            $accomplishment->setRelation('reportingPeriod', $reportingPeriod);
+        }
+
         return [
             'id' => $planItem->id,
             'objective' => $planItem->objective,
@@ -93,20 +114,53 @@ class OperationalPlanData
             'resourcesNeeded' => $planItem->resources_needed,
             'documentaryEvidenceRequirements' => $planItem->documentary_evidence_requirements ?? [],
             'manualCoAccountableUnits' => $planItem->manual_co_accountable_units ?? [],
-            'coAccountableDepartments' => $planItem->coAccountableDepartments
-                ->map(fn (Department $department): array => self::department($department))
+            'coAccountableOrganizationalUnits' => $planItem->coAccountableOrganizationalUnits
+                ->map(fn (OrganizationalUnit $organizationalUnit): array => self::organizationalUnit($organizationalUnit))
                 ->values(),
             'sortOrder' => $planItem->sort_order,
+            'accomplishment' => $accomplishment instanceof Accomplishment ? [
+                'id' => $accomplishment->id,
+                'reportedValue' => $accomplishment->reported_value,
+                'accomplishmentText' => $accomplishment->accomplishment_text,
+                'percentageAccomplished' => $accomplishment->percentage_accomplished,
+                'status' => $accomplishment->status->value,
+                'statusLabel' => $accomplishment->status->label(),
+                'submittedAt' => $accomplishment->submitted_at?->toISOString(),
+                'resubmittedAt' => $accomplishment->resubmitted_at?->toISOString(),
+                'updatedAt' => $accomplishment->updated_at?->toISOString(),
+                'createdBy' => null,
+                'updatedBy' => null,
+                'evidence' => [],
+                'remarks' => [],
+                'submissionBlocker' => null,
+                'submissionHistory' => [],
+                'evaluationHistory' => [],
+                'permissions' => [
+                    'uploadEvidence' => $user instanceof User
+                        && Gate::forUser($user)->allows('create', [Evidence::class, $accomplishment]),
+                    'submitAccomplishment' => false,
+                    'createRemark' => false,
+                ],
+            ] : null,
+            'permissions' => [
+                'createAccomplishment' => $reportingPeriod instanceof ReportingPeriod
+                    && $accomplishment === null
+                    && $user instanceof User
+                    && Gate::forUser($user)->allows('create', [Accomplishment::class, $planItem, $reportingPeriod]),
+                'updateAccomplishment' => $accomplishment instanceof Accomplishment
+                    && $user instanceof User
+                    && Gate::forUser($user)->allows('update', $accomplishment),
+            ],
         ];
     }
 
     /** @return array{id: int, name: string, code: string|null} */
-    private static function department(Department $department): array
+    private static function organizationalUnit(OrganizationalUnit $organizationalUnit): array
     {
         return [
-            'id' => $department->id,
-            'name' => $department->name,
-            'code' => $department->code,
+            'id' => $organizationalUnit->id,
+            'name' => $organizationalUnit->name,
+            'code' => $organizationalUnit->code,
         ];
     }
 
@@ -119,5 +173,14 @@ class OperationalPlanData
         return $operationalPlan->statusHistories
             ->first(fn (OperationalPlanStatusHistory $history): bool => $history->to_status === OperationalPlanStatus::Returned)
             ?->remarks;
+    }
+
+    private static function historyAction(OperationalPlanStatusHistory $history): string
+    {
+        if ($history->to_status === OperationalPlanStatus::Returned && in_array($history->from_status, [OperationalPlanStatus::Approved, OperationalPlanStatus::Closed], true)) {
+            return 'reopened';
+        }
+
+        return $history->to_status->value;
     }
 }

@@ -1,6 +1,9 @@
 export type * from './auth';
+export type * from './dashboard';
+export type * from './evaluation';
 export type * from './monitoring';
 export type * from './navigation';
 export type * from './operational-plan';
+export type * from './report';
 export type * from './teams';
 export type * from './ui';

@@ -17,12 +17,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { store, update } from '@/routes/monitoring/accomplishments';
 import type {
     MonitoringPlanItem,
     MonitoringReportingPeriod,
     TargetOperator,
 } from '@/types';
-import { store, update } from '@/routes/monitoring/accomplishments';
 
 const percentageOperators: Array<TargetOperator | null> = [
     null,
@@ -50,6 +50,7 @@ export function AccomplishmentDialog({
 }) {
     const [open, setOpen] = useState(false);
     const accomplishment = planItem.accomplishment;
+    const isReturned = accomplishment?.status === 'returned';
     const formRoute = accomplishment
         ? update.form([
               teamSlug,
@@ -71,7 +72,9 @@ export function AccomplishmentDialog({
                 <DialogHeader>
                     <DialogTitle>
                         {accomplishment
-                            ? 'Edit accomplishment draft'
+                            ? isReturned
+                                ? 'Edit returned accomplishment'
+                                : 'Edit accomplishment draft'
                             : 'Report accomplishment'}
                     </DialogTitle>
                     <DialogDescription>
@@ -173,7 +176,7 @@ export function AccomplishmentDialog({
                                 0 && (
                                 <div className="rounded-xl border bg-muted/20 p-4">
                                     <p className="text-sm font-medium">
-                                        Evidence expected later
+                                        Expected documentary evidence
                                     </p>
                                     <ul className="mt-2 grid list-disc gap-1 pl-5 text-sm leading-5 text-muted-foreground">
                                         {planItem.documentaryEvidenceRequirements.map(
@@ -189,10 +192,36 @@ export function AccomplishmentDialog({
                                 </div>
                             )}
 
+                            <div className="grid gap-3 rounded-xl border p-4">
+                                <div>
+                                    <p className="text-sm font-medium">
+                                        Upload documentary evidence
+                                    </p>
+                                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                        Upload the documents listed in the
+                                        evidence requirements. You can select
+                                        multiple files.
+                                    </p>
+                                </div>
+                                <Input
+                                    id={`${idPrefix}-evidence-files`}
+                                    name="evidence_files[]"
+                                    type="file"
+                                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                                    multiple
+                                    aria-label="Documentary evidence files"
+                                />
+                                <InputError message={errors.evidence_files} />
+                                <p className="text-xs text-muted-foreground">
+                                    Accepted formats: PDF, JPG, JPEG, and PNG.
+                                    Maximum 10 MB per file.
+                                </p>
+                            </div>
+
                             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                                This saves a draft only. Documentary evidence is
-                                required before submission in the next workflow
-                                phase.
+                                {isReturned
+                                    ? 'This updates the returned report. Save your changes, then upload at least one additional evidence file before resubmitting it for review.'
+                                    : 'This saves a draft. Upload at least one evidence file before submitting it for review.'}
                             </div>
 
                             <DialogFooter>
@@ -210,9 +239,11 @@ export function AccomplishmentDialog({
                                         <ClipboardPenLine />
                                     )}
                                     {processing
-                                        ? 'Saving...'
+                                        ? 'Saving…'
                                         : accomplishment
-                                          ? 'Update draft'
+                                          ? isReturned
+                                              ? 'Update returned report'
+                                              : 'Update draft'
                                           : 'Save draft'}
                                 </Button>
                             </DialogFooter>

@@ -15,7 +15,7 @@ test('reviewers approve a submitted plan and record the decision snapshot', func
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create(['goal' => 'Approved goal']);
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)
@@ -66,7 +66,7 @@ test('closed academic years forbid approval', function () {
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)

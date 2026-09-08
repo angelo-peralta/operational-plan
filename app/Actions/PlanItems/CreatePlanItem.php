@@ -15,15 +15,15 @@ class CreatePlanItem
 
     /**
      * @param  array<string, mixed>  $data
-     * @param  list<int>  $coAccountableDepartmentIds
+     * @param  list<int>  $coAccountableOrganizationalUnitIds
      */
     public function handle(
         KeyResultArea $keyResultArea,
         User $actor,
         array $data,
-        array $coAccountableDepartmentIds,
+        array $coAccountableOrganizationalUnitIds,
     ): PlanItem {
-        return DB::transaction(function () use ($keyResultArea, $actor, $data, $coAccountableDepartmentIds): PlanItem {
+        return DB::transaction(function () use ($keyResultArea, $actor, $data, $coAccountableOrganizationalUnitIds): PlanItem {
             $lockedOperationalPlan = $this->lockOperationalPlan->handle($keyResultArea->operational_plan_id);
             $lockedKeyResultArea = KeyResultArea::query()
                 ->whereKey($keyResultArea->id)
@@ -41,9 +41,9 @@ class CreatePlanItem
                 'created_by' => $actor->id,
                 'updated_by' => $actor->id,
             ]);
-            $planItem->coAccountableDepartments()->sync($coAccountableDepartmentIds);
+            $planItem->coAccountableOrganizationalUnits()->sync($coAccountableOrganizationalUnitIds);
 
-            return $planItem->load('coAccountableDepartments');
+            return $planItem->load('coAccountableOrganizationalUnits');
         });
     }
 }

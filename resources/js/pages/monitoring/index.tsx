@@ -1,17 +1,25 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
+    ChevronDown,
     ClipboardCheck,
-    Download,
-    ExternalLink,
     FileText,
+    History,
     PencilLine,
     Plus,
-    Upload,
+    Send,
 } from 'lucide-react';
+import { useState } from 'react';
+import {
+    EvaluationHistory,
+    LatestReviewFeedback,
+} from '@/components/evaluations/evaluation-history';
 import Heading from '@/components/heading';
 import { AccomplishmentDialog } from '@/components/monitoring/accomplishment-dialog';
-import { EvidenceUploadDialog } from '@/components/monitoring/evidence-upload-dialog';
+import { AccomplishmentSubmissionDialog } from '@/components/monitoring/accomplishment-submission-dialog';
+import { EvidenceList } from '@/components/monitoring/evidence-list';
+import { MonitoringRemarks } from '@/components/monitoring/monitoring-remarks';
 import { StatusBadge } from '@/components/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -21,31 +29,223 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import AppLayout from '@/layouts/app-layout';
+import { dashboard, home } from '@/routes';
+import { index } from '@/routes/monitoring';
 import type {
+    Accomplishment,
+    AccomplishmentSubmissionHistory,
     MonitoringPageProps,
     MonitoringPlanItem,
     MonitoringReportingPeriod,
 } from '@/types';
-import { dashboard } from '@/routes';
-import { index } from '@/routes/monitoring';
-import {
-    download as downloadEvidence,
-    show as showEvidence,
-} from '@/routes/monitoring/accomplishments/evidence';
+
+function formatDateTime(value: string): string {
+    return new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    }).format(new Date(value));
+}
+
+function formatStatus(
+    status: AccomplishmentSubmissionHistory['fromStatus'],
+): string {
+    return status
+        .replaceAll('_', ' ')
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function AccomplishmentSubmissionWorkflow({
+    teamSlug,
+    reportingPeriod,
+    planItem,
+    accomplishment,
+}: {
+    teamSlug: string;
+    reportingPeriod: MonitoringReportingPeriod;
+    planItem: MonitoringPlanItem;
+    accomplishment: Accomplishment;
+}) {
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const isResubmission = accomplishment.status === 'returned';
+    const submitLabel = isResubmission
+        ? 'Resubmit for review'
+        : 'Submit for review';
+
+    return (
+        <div className="grid gap-3 border-t pt-3">
+            {(accomplishment.submittedAt || accomplishment.resubmittedAt) && (
+                <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                    {accomplishment.submittedAt && (
+                        <div className="grid gap-0.5">
+                            <dt className="font-medium text-foreground">
+                                First submitted
+                            </dt>
+                            <dd>
+                                <time dateTime={accomplishment.submittedAt}>
+                                    {formatDateTime(accomplishment.submittedAt)}
+                                </time>
+                            </dd>
+                        </div>
+                    )}
+                    {accomplishment.resubmittedAt && (
+                        <div className="grid gap-0.5">
+                            <dt className="font-medium text-foreground">
+                                Last resubmitted
+                            </dt>
+                            <dd>
+                                <time dateTime={accomplishment.resubmittedAt}>
+                                    {formatDateTime(
+                                        accomplishment.resubmittedAt,
+                                    )}
+                                </time>
+                            </dd>
+                        </div>
+                    )}
+                </dl>
+            )}
+
+            {accomplishment.permissions.submitAccomplishment && (
+                <div className="flex flex-col justify-between gap-3 rounded-lg border bg-background p-3 sm:flex-row sm:items-center">
+                    <div className="grid gap-1">
+                        <p className="text-sm font-medium">
+                            {isResubmission
+                                ? 'Ready to resubmit?'
+                                : 'Ready for review?'}
+                        </p>
+                        <p
+                            className={
+                                accomplishment.submissionBlocker
+                                    ? 'text-xs leading-5 text-amber-700 dark:text-amber-300'
+                                    : 'text-xs leading-5 text-muted-foreground'
+                            }
+                        >
+                            {accomplishment.submissionBlocker ??
+                                `Submitting stores an immutable snapshot with ${accomplishment.evidence.length} evidence ${accomplishment.evidence.length === 1 ? 'file' : 'files'}.`}
+                        </p>
+                    </div>
+                    {accomplishment.submissionBlocker ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled
+                            title={accomplishment.submissionBlocker}
+                        >
+                            <Send /> {submitLabel}
+                        </Button>
+                    ) : (
+                        <AccomplishmentSubmissionDialog
+                            teamSlug={teamSlug}
+                            reportingPeriod={reportingPeriod}
+                            planItem={planItem}
+                            accomplishment={accomplishment}
+                            trigger={
+                                <Button type="button" size="sm">
+                                    <Send /> {submitLabel}
+                                </Button>
+                            }
+                        />
+                    )}
+                </div>
+            )}
+
+            {accomplishment.submissionHistory.length > 0 && (
+                <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+                    <CollapsibleTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-auto w-full justify-between px-0 py-1 hover:bg-transparent"
+                        >
+                            <span className="flex items-center gap-2">
+                                <History />
+                                Submission history (
+                                {accomplishment.submissionHistory.length})
+                            </span>
+                            <ChevronDown
+                                className={`transition-transform ${historyOpen ? 'rotate-180' : ''}`}
+                            />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-3">
+                        <p className="mb-4 text-xs leading-5 text-muted-foreground">
+                            Each entry preserves the report and evidence that
+                            were submitted in that revision.
+                        </p>
+                        <ol className="grid gap-4">
+                            {accomplishment.submissionHistory.map(
+                                (submission, index) => (
+                                    <li
+                                        key={submission.id}
+                                        className="relative grid gap-1 border-l-2 pl-5"
+                                    >
+                                        <span className="absolute top-1.5 -left-[5px] size-2 rounded-full bg-primary" />
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-medium">
+                                                Revision {submission.revision}
+                                            </p>
+                                            <StatusBadge
+                                                status={submission.toStatus}
+                                                label={submission.toStatusLabel}
+                                            />
+                                            {index === 0 && (
+                                                <Badge variant="secondary">
+                                                    Latest
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatStatus(
+                                                submission.fromStatus,
+                                            )}{' '}
+                                            → {submission.toStatusLabel}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {submission.submitter.name} ·{' '}
+                                            <time
+                                                dateTime={
+                                                    submission.submittedAt
+                                                }
+                                            >
+                                                {formatDateTime(
+                                                    submission.submittedAt,
+                                                )}
+                                            </time>{' '}
+                                            · {submission.evidenceCount}{' '}
+                                            evidence{' '}
+                                            {submission.evidenceCount === 1
+                                                ? 'file'
+                                                : 'files'}
+                                        </p>
+                                    </li>
+                                ),
+                            )}
+                        </ol>
+                    </CollapsibleContent>
+                </Collapsible>
+            )}
+        </div>
+    );
+}
 
 function AccomplishmentSummary({
     teamSlug,
+    operationalPlanId,
     reportingPeriod,
     planItem,
 }: {
     teamSlug: string;
+    operationalPlanId: number;
     reportingPeriod: MonitoringReportingPeriod;
     planItem: MonitoringPlanItem;
 }) {
@@ -60,7 +260,10 @@ function AccomplishmentSummary({
     }
 
     return (
-        <div className="grid gap-3 rounded-xl border bg-muted/20 p-4">
+        <div
+            id={`accomplishment-${accomplishment.id}`}
+            className="grid scroll-mt-6 gap-3 rounded-xl border bg-muted/20 p-4"
+        >
             <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge
                     status={accomplishment.status}
@@ -77,6 +280,10 @@ function AccomplishmentSummary({
                     </span>
                 )}
             </div>
+            <LatestReviewFeedback
+                accomplishmentStatus={accomplishment.status}
+                history={accomplishment.evaluationHistory}
+            />
             {accomplishment.reportedValue !== null && (
                 <p className="text-sm">
                     <span className="font-medium">Reported value:</span>{' '}
@@ -89,109 +296,57 @@ function AccomplishmentSummary({
                     {accomplishment.accomplishmentText}
                 </p>
             )}
+            {(accomplishment.createdBy || accomplishment.updatedBy) && (
+                <p className="text-xs text-muted-foreground">
+                    {accomplishment.createdBy
+                        ? `Reported by ${accomplishment.createdBy.name}`
+                        : 'Original reporter unavailable'}
+                    {accomplishment.updatedBy &&
+                    accomplishment.updatedBy.id !== accomplishment.createdBy?.id
+                        ? ` · Last updated by ${accomplishment.updatedBy.name}`
+                        : ''}
+                </p>
+            )}
             <div className="grid gap-2 border-t pt-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">
                         Uploaded evidence ({accomplishment.evidence.length})
                     </p>
-                    {accomplishment.permissions.uploadEvidence && (
-                        <EvidenceUploadDialog
-                            teamSlug={teamSlug}
-                            reportingPeriod={reportingPeriod}
-                            planItem={planItem}
-                            accomplishment={accomplishment}
-                            trigger={
-                                <Button size="sm" variant="outline">
-                                    <Upload /> Upload evidence
-                                </Button>
-                            }
-                        />
-                    )}
                 </div>
-                {accomplishment.evidence.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                        No documentary evidence uploaded yet.
-                    </p>
-                ) : (
-                    <ul className="grid gap-2">
-                        {accomplishment.evidence.map((evidence) => {
-                            const routeParameters = [
-                                teamSlug,
-                                reportingPeriod.id,
-                                planItem.id,
-                                accomplishment.id,
-                                evidence.id,
-                            ] as const;
-
-                            return (
-                                <li
-                                    key={evidence.id}
-                                    className="flex flex-col justify-between gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center"
-                                >
-                                    <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium">
-                                            {evidence.title ||
-                                                evidence.originalFilename}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {evidence.originalFilename} ·{' '}
-                                            {Math.max(
-                                                1,
-                                                Math.ceil(
-                                                    evidence.fileSize / 1024,
-                                                ),
-                                            ).toLocaleString()}{' '}
-                                            KB · {evidence.uploadedBy.name}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <Button
-                                            asChild
-                                            size="icon"
-                                            variant="ghost"
-                                        >
-                                            <a
-                                                href={showEvidence.url(
-                                                    routeParameters,
-                                                )}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                aria-label={`View ${evidence.originalFilename}`}
-                                            >
-                                                <ExternalLink />
-                                            </a>
-                                        </Button>
-                                        <Button
-                                            asChild
-                                            size="icon"
-                                            variant="ghost"
-                                        >
-                                            <a
-                                                href={downloadEvidence.url(
-                                                    routeParameters,
-                                                )}
-                                                aria-label={`Download ${evidence.originalFilename}`}
-                                            >
-                                                <Download />
-                                            </a>
-                                        </Button>
-                                    </div>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                )}
+                <EvidenceList
+                    teamSlug={teamSlug}
+                    reportingPeriodId={reportingPeriod.id}
+                    planItemId={planItem.id}
+                    accomplishmentId={accomplishment.id}
+                    evidence={accomplishment.evidence}
+                />
             </div>
+            <MonitoringRemarks
+                key={accomplishment.id}
+                teamSlug={teamSlug}
+                operationalPlanId={operationalPlanId}
+                reportingPeriodId={reportingPeriod.id}
+                accomplishment={accomplishment}
+            />
+            <AccomplishmentSubmissionWorkflow
+                teamSlug={teamSlug}
+                reportingPeriod={reportingPeriod}
+                planItem={planItem}
+                accomplishment={accomplishment}
+            />
+            <EvaluationHistory history={accomplishment.evaluationHistory} />
         </div>
     );
 }
 
 function PlanItemCard({
     teamSlug,
+    operationalPlanId,
     reportingPeriod,
     planItem,
 }: {
     teamSlug: string;
+    operationalPlanId: number;
     reportingPeriod: MonitoringReportingPeriod;
     planItem: MonitoringPlanItem;
 }) {
@@ -222,7 +377,10 @@ function PlanItemCard({
                                         <Plus />
                                     )}
                                     {planItem.accomplishment
-                                        ? 'Edit draft'
+                                        ? planItem.accomplishment.status ===
+                                          'returned'
+                                            ? 'Edit returned report'
+                                            : 'Edit draft'
                                         : 'Report accomplishment'}
                                 </Button>
                             }
@@ -241,6 +399,7 @@ function PlanItemCard({
                 )}
                 <AccomplishmentSummary
                     teamSlug={teamSlug}
+                    operationalPlanId={operationalPlanId}
                     reportingPeriod={reportingPeriod}
                     planItem={planItem}
                 />
@@ -276,12 +435,7 @@ export default function MonitoringIndex({
     const teamSlug = currentTeam!.slug;
 
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: 'Dashboard', href: dashboard(teamSlug) },
-                { title: 'Monitoring', href: index(teamSlug) },
-            ]}
-        >
+        <>
             <Head title="Monitoring" />
 
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
@@ -371,7 +525,10 @@ export default function MonitoringIndex({
                                 <div>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <h2 className="text-xl font-semibold">
-                                            {operationalPlan.department.name}
+                                            {
+                                                operationalPlan
+                                                    .organizationalUnit.name
+                                            }
                                         </h2>
                                         <StatusBadge
                                             status={operationalPlan.status}
@@ -410,6 +567,9 @@ export default function MonitoringIndex({
                                                         <PlanItemCard
                                                             key={planItem.id}
                                                             teamSlug={teamSlug}
+                                                            operationalPlanId={
+                                                                operationalPlan.id
+                                                            }
                                                             reportingPeriod={
                                                                 selectedReportingPeriod
                                                             }
@@ -426,6 +586,23 @@ export default function MonitoringIndex({
                     </div>
                 )}
             </div>
-        </AppLayout>
+        </>
     );
 }
+
+MonitoringIndex.layout = (props: {
+    currentTeam?: { slug: string } | null;
+}) => ({
+    breadcrumbs: [
+        {
+            title: 'Dashboard',
+            href: props.currentTeam
+                ? dashboard(props.currentTeam.slug)
+                : home(),
+        },
+        {
+            title: 'Monitoring',
+            href: props.currentTeam ? index(props.currentTeam.slug) : home(),
+        },
+    ],
+});

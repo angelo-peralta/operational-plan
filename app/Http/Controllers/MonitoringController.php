@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
 use App\Data\MonitoringData;
 use App\Enums\OperationalPlanStatus;
 use App\Enums\ReportingPeriodStatus;
@@ -11,7 +12,6 @@ use App\Models\Accomplishment;
 use App\Models\OperationalPlan;
 use App\Models\ReportingPeriod;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -21,6 +21,8 @@ use Inertia\Response;
 
 class MonitoringController extends Controller
 {
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     public function __invoke(string $currentTeam, Request $request): Response
     {
         Gate::authorize('viewAny', Accomplishment::class);
@@ -89,7 +91,7 @@ class MonitoringController extends Controller
         $operationalPlans = OperationalPlan::query()
             ->with([
                 'academicYear:id,name,status,is_current,start_year,end_year',
-                'department:id,name,code',
+                'organizationalUnit:id,name,code',
                 'keyResultAreas:id,operational_plan_id,code,name,description,sort_order',
                 'keyResultAreas.planItems:id,key_result_area_id,objective,strategy,kpi_target_text,target_value,target_unit,target_operator,target_frequency,documentary_evidence_requirements,sort_order',
                 'keyResultAreas.planItems.accomplishments' => function (Relation $relation) use ($reportingPeriod): void {
@@ -102,6 +104,8 @@ class MonitoringController extends Controller
                             'accomplishment_text',
                             'percentage_accomplished',
                             'status',
+                            'created_by',
+                            'updated_by',
                             'submitted_at',
                             'resubmitted_at',
                             'updated_at',
@@ -119,11 +123,58 @@ class MonitoringController extends Controller
                                         'original_filename',
                                         'mime_type',
                                         'file_size',
+                                        'checksum',
                                         'uploaded_by',
                                         'created_at',
                                     ])
-                                    ->with('uploader:id,name')
+                                    ->with([
+                                        'uploader:id,name',
+                                        'remarks' => fn (Relation $relation) => $relation->getQuery()
+                                            ->with([
+                                                'author.organizationalUnitAssignments.organizationalUnit:id,type',
+                                                'reportingPeriod:id,name',
+                                            ])
+                                            ->oldest('created_at')
+                                            ->oldest('id'),
+                                    ])
                                     ->oldest();
+                            },
+                            'creator:id,name',
+                            'editor:id,name',
+                            'remarks' => fn (Relation $relation) => $relation->getQuery()
+                                ->with([
+                                    'author.organizationalUnitAssignments.organizationalUnit:id,type',
+                                    'reportingPeriod:id,name',
+                                ])
+                                ->oldest('created_at')
+                                ->oldest('id'),
+                            'submissions' => function (Relation $relation): void {
+                                $relation->getQuery()
+                                    ->select([
+                                        'id',
+                                        'accomplishment_id',
+                                        'revision',
+                                        'submitted_by',
+                                        'from_status',
+                                        'to_status',
+                                        'evidence_count',
+                                        'submitted_at',
+                                    ])
+                                    ->with([
+                                        'submitter:id,name',
+                                        'evaluations' => fn (Relation $relation) => $relation->getQuery()->with([
+                                            'reviewer:id,name',
+                                            'organizationalUnit:id,name,code,type',
+                                            'overriddenEvaluation:id,reviewer_id,rating',
+                                            'fieldRemarks' => fn (Relation $relation) => $relation->getQuery()
+                                                ->with([
+                                                    'author.organizationalUnitAssignments.organizationalUnit:id,type',
+                                                    'reportingPeriod:id,name',
+                                                ])
+                                                ->oldest('created_at')
+                                                ->oldest('id'),
+                                        ]),
+                                    ]);
                             },
                         ]);
                 },
@@ -133,11 +184,8 @@ class MonitoringController extends Controller
                 OperationalPlanStatus::Approved,
                 OperationalPlanStatus::Closed,
             ])
-            ->when(
-                $user->isDepartmentUser(),
-                fn (Builder $query): Builder => $query->where('department_id', $user->department_id),
-            )
-            ->orderBy('department_id')
+            ->whereIn('organizational_unit_id', $this->scope->visibleUnitIds($user))
+            ->orderBy('organizational_unit_id')
             ->get()
             ->map(fn (OperationalPlan $operationalPlan): array => MonitoringData::operationalPlan(
                 $operationalPlan,

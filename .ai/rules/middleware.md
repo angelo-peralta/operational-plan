@@ -5,5 +5,5 @@ paths:
 
 # Middleware
 
-## Include attributes used by authorization
-When partially eager-loading the authenticated user's department, include is_active. OperationalPlanPolicy::create calls Department::isActive(), and loadMissing will not fetch a column omitted from an already-loaded relation.
+## Share only canonical planning authority
+The authenticated Inertia payload exposes the canonical `users.role`, current valid organizational assignments, and policy-derived permissions. Do not eager-load or share legacy `department_id`, `role_id`, Department, or role-catalog data as active user authority.

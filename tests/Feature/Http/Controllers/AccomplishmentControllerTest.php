@@ -7,11 +7,14 @@ use App\Http\Middleware\ResolveAcademicYearContext;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
 use App\Models\Department;
+use App\Models\Evidence;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
 use App\Models\PlanItem;
 use App\Models\ReportingPeriod;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 function accomplishmentContext(): array
 {
@@ -51,7 +54,32 @@ test('department users create a semester accomplishment draft with a calculated 
         ->reporting_period_id->toBe($period->id)
         ->percentage_accomplished->toBe('75.0000')
         ->status->toBe(AccomplishmentStatus::Draft)
+        ->created_by->toBe($user->id)
+        ->updated_by->toBe($user->id)
         ->submitted_by->toBeNull();
+});
+
+test('department users create an accomplishment with documentary evidence files', function () {
+    Storage::fake('local');
+    extract(accomplishmentContext());
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->post(route('monitoring.accomplishments.store', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+        ]), [
+            'accomplishment_text' => 'The required training was completed.',
+            'evidence_files' => [
+                UploadedFile::fake()->create('completion-report.pdf', 100, 'application/pdf'),
+                UploadedFile::fake()->image('attendance.jpg'),
+            ],
+        ]);
+
+    $response->assertSessionHasNoErrors()->assertRedirect();
+    expect(Evidence::query()->count())->toBe(2);
+    Evidence::query()->each(fn (Evidence $evidence) => Storage::disk('local')->assertExists($evidence->stored_path));
 });
 
 test('qualitative accomplishments do not receive a forced percentage', function () {
@@ -72,7 +100,11 @@ test('qualitative accomplishments do not receive a forced percentage', function 
 
 test('department users update only draft accomplishments in their own department', function () {
     extract(accomplishmentContext());
-    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create();
+    $originalAuthor = User::factory()->departmentUser()->create();
+    $accomplishment = Accomplishment::factory()->for($planItem)->for($period)->create([
+        'created_by' => $originalAuthor->id,
+        'updated_by' => $originalAuthor->id,
+    ]);
 
     $response = $this->actingAs($user)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
@@ -90,7 +122,9 @@ test('department users update only draft accomplishments in their own department
     expect($accomplishment->fresh())
         ->reported_value->toBe('20.0000')
         ->percentage_accomplished->toBe('100.0000')
-        ->accomplishment_text->toBe('All staff completed training.');
+        ->accomplishment_text->toBe('All staff completed training.')
+        ->created_by->toBe($originalAuthor->id)
+        ->updated_by->toBe($user->id);
 });
 
 test('cross-department accomplishment mutations return 404 without changing the record', function () {
@@ -157,10 +191,12 @@ test('accomplishment input rejects client controlled scope and workflow fields',
             'accomplishment_text' => 'Valid description',
             'status' => AccomplishmentStatus::Accepted->value,
             'percentage_accomplished' => 999,
+            'created_by' => User::factory()->superAdmin()->create()->id,
+            'updated_by' => User::factory()->superAdmin()->create()->id,
             'submitted_by' => $user->id,
         ]);
 
-    $response->assertInvalid(['status', 'percentage_accomplished', 'submitted_by']);
+    $response->assertInvalid(['status', 'percentage_accomplished', 'created_by', 'updated_by', 'submitted_by']);
     $this->assertDatabaseEmpty('accomplishments');
 });
 
@@ -245,7 +281,7 @@ test('the same plan item accepts a distinct accomplishment in the second semeste
 
 test('reviewers cannot author department accomplishments', function () {
     extract(accomplishmentContext());
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
 
     $response = $this->actingAs($reviewer)
         ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
@@ -316,4 +352,29 @@ test('submitted accomplishments cannot be changed through the draft update endpo
 
     $response->assertForbidden();
     expect($accomplishment->fresh()->accomplishment_text)->toBe('Submitted report');
+});
+
+test('returned accomplishments can be revised before resubmission', function () {
+    extract(accomplishmentContext());
+    $accomplishment = Accomplishment::factory()->returned()->for($planItem)->for($period)->create([
+        'accomplishment_text' => 'Original returned report',
+    ]);
+
+    $response = $this->actingAs($user)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->patch(route('monitoring.accomplishments.update', [
+            'current_team' => $user->currentTeam,
+            'reporting_period' => $period,
+            'plan_item' => $planItem,
+            'accomplishment' => $accomplishment,
+        ]), [
+            'reported_value' => '20',
+            'accomplishment_text' => 'Revised report with reviewer clarification.',
+        ]);
+
+    $response->assertSessionHasNoErrors()->assertRedirect();
+    expect($accomplishment->fresh())
+        ->status->toBe(AccomplishmentStatus::Returned)
+        ->reported_value->toBe('20.0000')
+        ->accomplishment_text->toBe('Revised report with reviewer clarification.');
 });

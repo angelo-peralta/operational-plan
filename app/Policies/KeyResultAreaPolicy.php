@@ -29,7 +29,8 @@ class KeyResultAreaPolicy
      */
     public function create(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $user->can('update', $operationalPlan);
+        return $user->isSystemAdmin()
+            && $user->can('view', $operationalPlan);
     }
 
     /**
@@ -37,12 +38,14 @@ class KeyResultAreaPolicy
      */
     public function update(User $user, KeyResultArea $keyResultArea): bool
     {
-        return $user->can('update', $keyResultArea->operationalPlan);
+        return $user->isSystemAdmin()
+            && $user->can('view', $keyResultArea->operationalPlan);
     }
 
     public function reorder(User $user, OperationalPlan $operationalPlan): bool
     {
-        return $user->can('update', $operationalPlan);
+        return $user->isSystemAdmin()
+            && $user->can('view', $operationalPlan);
     }
 
     /**
@@ -50,7 +53,8 @@ class KeyResultAreaPolicy
      */
     public function delete(User $user, KeyResultArea $keyResultArea): bool
     {
-        return false;
+        return $user->isSystemAdmin()
+            && $user->can('view', $keyResultArea->operationalPlan);
     }
 
     /**

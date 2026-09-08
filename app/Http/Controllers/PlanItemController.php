@@ -28,7 +28,7 @@ class PlanItemController extends Controller
             $request->keyResultArea(),
             $actor,
             $request->validatedData(),
-            $request->coAccountableDepartmentIds(),
+            $request->coAccountableOrganizationalUnitIds(),
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Plan Item added.')]);
@@ -48,7 +48,7 @@ class PlanItemController extends Controller
             $request->planItem(),
             $actor,
             $request->validatedData(),
-            $request->coAccountableDepartmentIds(),
+            $request->coAccountableOrganizationalUnitIds(),
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Plan Item updated.')]);

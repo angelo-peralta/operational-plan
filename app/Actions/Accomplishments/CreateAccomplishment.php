@@ -50,6 +50,8 @@ class CreateAccomplishment
                     $data['reported_value'],
                 ),
                 'status' => AccomplishmentStatus::Draft,
+                'created_by' => $actor->id,
+                'updated_by' => $actor->id,
             ]);
             $accomplishment->setRelation('planItem', $context['planItem']);
             $accomplishment->setRelation('reportingPeriod', $context['reportingPeriod']);

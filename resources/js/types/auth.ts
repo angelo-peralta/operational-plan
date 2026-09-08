@@ -1,4 +1,4 @@
-import type { DepartmentSummary, UserRole } from './operational-plan';
+import type { UserRole } from './operational-plan';
 
 export type User = {
     id: number;
@@ -10,8 +10,15 @@ export type User = {
     created_at: string;
     updated_at: string;
     role: UserRole | null;
+    scopeLabel: string;
+    organizationalAssignments: {
+        id: number;
+        name: string;
+        positionTitle: string | null;
+        assignmentType: string;
+    }[];
+    permissions: { viewPlans: boolean; viewEvaluations: boolean };
     roleLabel: string | null;
-    department: DepartmentSummary | null;
     [key: string]: unknown;
 };
 

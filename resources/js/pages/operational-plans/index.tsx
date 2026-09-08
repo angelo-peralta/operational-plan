@@ -43,39 +43,40 @@ import { home } from '@/routes';
 import { index, official, show, store } from '@/routes/operational-plans';
 import type {
     AccountableUserOption,
-    DepartmentSummary,
+    OrganizationalUnitSummary,
     OperationalPlanSummary,
 } from '@/types';
 
 type Props = {
     operationalPlans: OperationalPlanSummary[];
-    targetDepartments: DepartmentSummary[];
+    targetOrganizationalUnits: OrganizationalUnitSummary[];
     accountableUsers: AccountableUserOption[];
 };
 
 function CreateOperationalPlanDialog({
     teamSlug,
-    targetDepartments,
+    targetOrganizationalUnits,
     accountableUsers,
 }: {
     teamSlug: string;
-    targetDepartments: DepartmentSummary[];
+    targetOrganizationalUnits: OrganizationalUnitSummary[];
     accountableUsers: AccountableUserOption[];
 }) {
-    const { auth } = usePage().props;
     const [open, setOpen] = useState(false);
-    const [selectedDepartmentId, setSelectedDepartmentId] = useState(
-        targetDepartments[0]?.id.toString() ?? '',
-    );
+    const [selectedOrganizationalUnitId, setSelectedOrganizationalUnitId] =
+        useState(targetOrganizationalUnits[0]?.id.toString() ?? '');
     const [selectedAccountableUserId, setSelectedAccountableUserId] =
         useState('none');
-    const isSuperAdmin = auth.user.role === 'super_admin';
     const availableAccountableUsers = accountableUsers.filter(
-        (user) => user.departmentId.toString() === selectedDepartmentId,
+        (user) =>
+            user.organizationalUnitId.toString() ===
+            selectedOrganizationalUnitId,
     );
 
     const resetSelection = (): void => {
-        setSelectedDepartmentId(targetDepartments[0]?.id.toString() ?? '');
+        setSelectedOrganizationalUnitId(
+            targetOrganizationalUnits[0]?.id.toString() ?? '',
+        );
         setSelectedAccountableUserId('none');
     };
 
@@ -100,7 +101,8 @@ function CreateOperationalPlanDialog({
                     <DialogTitle>Create Operational Plan</DialogTitle>
                     <DialogDescription>
                         The selected Academic Year is applied by the server.
-                        Each department can have one plan for that year.
+                        Each organizational unit can have one plan for that
+                        year.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -118,40 +120,46 @@ function CreateOperationalPlanDialog({
                 >
                     {({ errors, processing }) => (
                         <>
-                            {isSuperAdmin && (
+                            {
                                 <div className="grid gap-2">
-                                    <Label htmlFor="create-plan-department">
-                                        Office / Department
+                                    <Label htmlFor="create-plan-organizational-unit">
+                                        Organizational unit / Office
                                     </Label>
                                     <Select
-                                        name="department_id"
-                                        value={selectedDepartmentId}
+                                        name="organizational_unit_id"
+                                        value={selectedOrganizationalUnitId}
                                         onValueChange={(value) => {
-                                            setSelectedDepartmentId(value);
+                                            setSelectedOrganizationalUnitId(
+                                                value,
+                                            );
                                             setSelectedAccountableUserId(
                                                 'none',
                                             );
                                         }}
                                     >
                                         <SelectTrigger
-                                            id="create-plan-department"
+                                            id="create-plan-organizational-unit"
                                             className="w-full"
                                             aria-invalid={Boolean(
-                                                errors.department_id,
+                                                errors.organizational_unit_id,
                                             )}
                                         >
-                                            <SelectValue placeholder="Select a department" />
+                                            <SelectValue placeholder="Select a unit" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {targetDepartments.map(
-                                                (department) => (
+                                            {targetOrganizationalUnits.map(
+                                                (organizationalUnit) => (
                                                     <SelectItem
-                                                        key={department.id}
-                                                        value={department.id.toString()}
+                                                        key={
+                                                            organizationalUnit.id
+                                                        }
+                                                        value={organizationalUnit.id.toString()}
                                                     >
-                                                        {department.name}
-                                                        {department.code
-                                                            ? ` (${department.code})`
+                                                        {
+                                                            organizationalUnit.name
+                                                        }
+                                                        {organizationalUnit.code
+                                                            ? ` (${organizationalUnit.code})`
                                                             : ''}
                                                     </SelectItem>
                                                 ),
@@ -159,10 +167,10 @@ function CreateOperationalPlanDialog({
                                         </SelectContent>
                                     </Select>
                                     <InputError
-                                        message={errors.department_id}
+                                        message={errors.organizational_unit_id}
                                     />
                                 </div>
-                            )}
+                            }
 
                             <div className="grid gap-2">
                                 <Label htmlFor="create-plan-accountable-user">
@@ -235,7 +243,7 @@ function CreateOperationalPlanDialog({
                                     <Input
                                         id="create-plan-accountable-position"
                                         name="accountable_position"
-                                        placeholder="e.g. Department Director"
+                                        placeholder="e.g. Office Director"
                                         aria-invalid={Boolean(
                                             errors.accountable_position,
                                         )}
@@ -290,7 +298,7 @@ function accountableLabel(plan: OperationalPlanSummary): string {
 
 export default function OperationalPlansIndex({
     operationalPlans,
-    targetDepartments,
+    targetOrganizationalUnits,
     accountableUsers,
 }: Props) {
     const { currentTeam, selectedAcademicYear, auth } = usePage().props;
@@ -305,8 +313,8 @@ export default function OperationalPlansIndex({
 
     const canCreate =
         selectedAcademicYear?.status === 'open' &&
-        targetDepartments.length > 0 &&
-        auth.user.role !== 'reviewer';
+        targetOrganizationalUnits.length > 0 &&
+        auth.user.role !== 'executive';
 
     return (
         <>
@@ -324,7 +332,9 @@ export default function OperationalPlansIndex({
                     {canCreate && (
                         <CreateOperationalPlanDialog
                             teamSlug={currentTeam.slug}
-                            targetDepartments={targetDepartments}
+                            targetOrganizationalUnits={
+                                targetOrganizationalUnits
+                            }
                             accountableUsers={accountableUsers}
                         />
                     )}
@@ -358,25 +368,28 @@ export default function OperationalPlansIndex({
                                     {selectedAcademicYear.status !== 'open'
                                         ? 'This Academic Year is not open, so new plans cannot be created.'
                                         : canCreate
-                                          ? 'Create the first plan for an eligible department.'
-                                          : 'There are no plans available for your current role and department.'}
+                                          ? 'Create the first plan for an eligible organizational unit.'
+                                          : 'There are no plans available for your current role and organizational scope.'}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-4">
                         {operationalPlans.map((plan) => (
                             <Card key={plan.id} className="overflow-hidden">
                                 <CardHeader className="flex-row items-start justify-between gap-4">
                                     <div className="min-w-0 space-y-2">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <CardTitle className="leading-6">
-                                                {plan.department.name}
+                                                {plan.organizationalUnit.name}
                                             </CardTitle>
-                                            {plan.department.code && (
+                                            {plan.organizationalUnit.code && (
                                                 <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
-                                                    {plan.department.code}
+                                                    {
+                                                        plan.organizationalUnit
+                                                            .code
+                                                    }
                                                 </span>
                                             )}
                                         </div>
@@ -475,8 +488,8 @@ export default function OperationalPlansIndex({
                 {selectedAcademicYear && (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Building2 className="size-4" />
-                        Department access and Academic Year isolation are
-                        enforced by the server.
+                        Organizational unit access and Academic Year isolation
+                        are enforced by the server.
                     </div>
                 )}
             </div>

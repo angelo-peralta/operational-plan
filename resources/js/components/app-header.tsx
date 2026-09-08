@@ -2,16 +2,18 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     CalendarRange,
+    ClipboardCheck,
     ClipboardList,
+    FileChartColumn,
     LayoutGrid,
     Menu,
+    ShieldCheck,
     Users,
 } from 'lucide-react';
 import { AcademicYearSelector } from '@/components/academic-year-selector';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { TeamSwitcher } from '@/components/team-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,9 +40,12 @@ import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { dashboard, home } from '@/routes';
 import { index as academicYearsIndex } from '@/routes/academic-years';
-import { index as departmentsIndex } from '@/routes/administration/departments';
+import { index as organizationalUnitsIndex } from '@/routes/administration/organizational-units';
+import { index as rolesIndex } from '@/routes/administration/roles';
 import { index as usersIndex } from '@/routes/administration/users';
+import { index as evaluationsIndex } from '@/routes/evaluations';
 import { index as operationalPlansIndex } from '@/routes/operational-plans';
+import { index as reportsIndex } from '@/routes/reports';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -56,6 +61,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
     const dashboardUrl = currentTeam ? dashboard(currentTeam.slug) : home();
+    const canReview = auth.user.permissions.viewEvaluations;
 
     const mainNavItems: NavItem[] = [
         {
@@ -63,16 +69,30 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
             href: dashboardUrl,
             icon: LayoutGrid,
         },
-        ...(currentTeam
+        ...(currentTeam && auth.user.permissions.viewPlans
             ? [
                   {
                       title: 'Operational Plans',
                       href: operationalPlansIndex(currentTeam.slug),
                       icon: ClipboardList,
                   },
+                  {
+                      title: 'Reports',
+                      href: reportsIndex(currentTeam.slug),
+                      icon: FileChartColumn,
+                  },
               ]
             : []),
-        ...(auth.user.role === 'super_admin' && currentTeam
+        ...(canReview && currentTeam
+            ? [
+                  {
+                      title: 'Evidence Review',
+                      href: evaluationsIndex(currentTeam.slug),
+                      icon: ClipboardCheck,
+                  },
+              ]
+            : []),
+        ...(auth.user.role === 'system_admin' && currentTeam
             ? [
                   {
                       title: 'Academic Years',
@@ -80,9 +100,14 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                       icon: CalendarRange,
                   },
                   {
-                      title: 'Departments',
-                      href: departmentsIndex(currentTeam.slug),
+                      title: 'Organizational units',
+                      href: organizationalUnitsIndex(currentTeam.slug),
                       icon: Building2,
+                  },
+                  {
+                      title: 'Roles',
+                      href: rolesIndex(currentTeam.slug),
+                      icon: ShieldCheck,
                   },
                   {
                       title: 'Users',
@@ -211,10 +236,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                 <UserMenuContent user={auth.user} />
                             </DropdownMenuContent>
                         </DropdownMenu>
-
-                        <div className="hidden xl:block">
-                            <TeamSwitcher inHeader />
-                        </div>
                     </div>
                 </div>
             </div>

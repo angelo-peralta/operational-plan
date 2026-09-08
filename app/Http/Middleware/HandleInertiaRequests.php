@@ -2,13 +2,19 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\OrganizationalUnits\ResolveOrganizationalScope;
+use App\Enums\OrganizationalUnitType;
 use App\Models\AcademicYear;
+use App\Models\Evaluation;
+use App\Models\OperationalPlan;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(private ResolveOrganizationalScope $scope) {}
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -40,7 +46,9 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         if ($user !== null) {
-            $user->loadMissing('department:id,name,code,is_active');
+            $user->loadMissing([
+                'organizationalUnitAssignments.organizationalUnit',
+            ]);
         }
 
         return [
@@ -68,6 +76,14 @@ class HandleInertiaRequests extends Middleware
      */
     private function userData(User $user): array
     {
+        $assignedIds = $this->scope->assignedUnitIds($user);
+        $assignments = $user->organizationalUnitAssignments
+            ->filter(fn ($assignment): bool => in_array($assignment->organizational_unit_id, $assignedIds, true));
+        $universityScope = $user->isExecutive() && $assignments->contains(
+            fn ($assignment): bool => $assignment->organizationalUnit->parent_id === null
+                && $assignment->organizationalUnit->type === OrganizationalUnitType::University,
+        );
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -75,13 +91,19 @@ class HandleInertiaRequests extends Middleware
             'email_verified_at' => $user->email_verified_at?->toISOString(),
             'created_at' => $user->created_at?->toISOString(),
             'updated_at' => $user->updated_at?->toISOString(),
-            'role' => $user->role->value,
-            'roleLabel' => $user->role->label(),
-            'department' => $user->department ? [
-                'id' => $user->department->id,
-                'name' => $user->department->name,
-                'code' => $user->department->code,
-            ] : null,
+            'role' => $user->accessLevel()->value,
+            'scopeLabel' => $user->isSystemAdmin() ? 'System administration' : ($universityScope ? 'University-wide' : ($assignments->map(fn ($assignment): string => $assignment->organizationalUnit->name)->implode(', ') ?: 'No organizational assignment')),
+            'organizationalAssignments' => $assignments->map(fn ($assignment): array => [
+                'id' => $assignment->organizational_unit_id,
+                'name' => $assignment->organizationalUnit->name,
+                'positionTitle' => $assignment->position_title,
+                'assignmentType' => $assignment->assignment_type->value,
+            ])->values(),
+            'permissions' => [
+                'viewPlans' => $user->can('viewAny', OperationalPlan::class),
+                'viewEvaluations' => $user->can('viewAny', Evaluation::class),
+            ],
+            'roleLabel' => $user->roleLabel(),
         ];
     }
 

@@ -1,17 +1,12 @@
-import { Form, Head, usePage } from '@inertiajs/react';
-import { CircleCheck, Pencil, Plus, ShieldCheck, Users } from 'lucide-react';
+import { Head, useForm, usePage } from '@inertiajs/react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -30,540 +25,588 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
 import { home } from '@/routes';
 import { index, store, update } from '@/routes/administration/users';
-import type {
-    AdministrationUser,
-    DepartmentSummary,
-    SelectOption,
-    UserRole,
-} from '@/types';
+import type { UserRole } from '@/types';
 
-type Props = {
-    users: AdministrationUser[];
-    departments: DepartmentSummary[];
-    roles: SelectOption<UserRole>[];
+type Assignment = {
+    organizational_unit_id: string;
+    assignment_type: string;
+    position_title: string;
+    is_primary: boolean;
+    is_active: boolean;
+    starts_on: string;
+    ends_on: string;
 };
-
-type UserFieldsProps = {
-    departments: DepartmentSummary[];
-    errors: Partial<Record<string, string>>;
-    idPrefix: string;
-    roles: SelectOption<UserRole>[];
+type ManagedUser = {
+    id: number;
+    name: string;
+    email: string;
     role: UserRole;
-    departmentId: string;
-    onRoleChange: (role: UserRole) => void;
-    onDepartmentChange: (departmentId: string) => void;
-    defaults?: AdministrationUser;
-    requirePassword?: boolean;
+    roleLabel: string;
+    assignments: (Omit<
+        Assignment,
+        'organizational_unit_id' | 'starts_on' | 'ends_on' | 'position_title'
+    > & {
+        organizational_unit_id: number;
+        unit_name: string;
+        starts_on: string | null;
+        ends_on: string | null;
+        position_title: string | null;
+    })[];
+};
+type Props = {
+    users: ManagedUser[];
+    roles: { value: UserRole; label: string }[];
+    organizationalUnits: {
+        id: number;
+        name: string;
+        code: string | null;
+        is_active: boolean;
+    }[];
 };
 
-function UserFields({
-    departments,
-    errors,
-    idPrefix,
-    roles,
-    role,
-    departmentId,
-    onRoleChange,
-    onDepartmentChange,
-    defaults,
-    requirePassword = false,
-}: UserFieldsProps) {
-    const updateRole = (nextRole: string): void => {
-        const typedRole = nextRole as UserRole;
-        onRoleChange(typedRole);
-
-        if (typedRole !== 'department_user') {
-            onDepartmentChange('');
-        }
-    };
-
-    return (
-        <div className="grid gap-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-name`}>Name</Label>
-                    <Input
-                        id={`${idPrefix}-name`}
-                        name="name"
-                        defaultValue={defaults?.name}
-                        autoComplete="name"
-                        required
-                        aria-invalid={Boolean(errors.name)}
-                        aria-describedby={
-                            errors.name ? `${idPrefix}-name-error` : undefined
-                        }
-                    />
-                    <InputError
-                        id={`${idPrefix}-name-error`}
-                        message={errors.name}
-                    />
-                </div>
-
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-email`}>Email</Label>
-                    <Input
-                        id={`${idPrefix}-email`}
-                        name="email"
-                        type="email"
-                        defaultValue={defaults?.email}
-                        autoComplete="email"
-                        required
-                        aria-invalid={Boolean(errors.email)}
-                        aria-describedby={
-                            errors.email ? `${idPrefix}-email-error` : undefined
-                        }
-                    />
-                    <InputError
-                        id={`${idPrefix}-email-error`}
-                        message={errors.email}
-                    />
-                </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-role`}>Role</Label>
-                    <input type="hidden" name="role" value={role} />
-                    <Select value={role} onValueChange={updateRole}>
-                        <SelectTrigger
-                            id={`${idPrefix}-role`}
-                            className="w-full"
-                            aria-invalid={Boolean(errors.role)}
-                            aria-describedby={
-                                errors.role
-                                    ? `${idPrefix}-role-error`
-                                    : undefined
-                            }
-                        >
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {roles.map((option) => (
-                                <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <InputError
-                        id={`${idPrefix}-role-error`}
-                        message={errors.role}
-                    />
-                </div>
-
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-department`}>Department</Label>
-                    <input
-                        type="hidden"
-                        name="department_id"
-                        value={departmentId}
-                    />
-                    <Select
-                        value={departmentId || undefined}
-                        onValueChange={onDepartmentChange}
-                        disabled={role !== 'department_user'}
-                    >
-                        <SelectTrigger
-                            id={`${idPrefix}-department`}
-                            className="w-full"
-                            aria-invalid={Boolean(errors.department_id)}
-                            aria-describedby={
-                                errors.department_id
-                                    ? `${idPrefix}-department-error`
-                                    : undefined
-                            }
-                        >
-                            <SelectValue
-                                placeholder={
-                                    role === 'department_user'
-                                        ? 'Select a department'
-                                        : 'Not department-scoped'
-                                }
-                            />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {departments.map((department) => (
-                                <SelectItem
-                                    key={department.id}
-                                    value={String(department.id)}
-                                >
-                                    {department.name}
-                                    {department.code
-                                        ? ` (${department.code})`
-                                        : ''}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <InputError
-                        id={`${idPrefix}-department-error`}
-                        message={errors.department_id}
-                    />
-                    {role === 'department_user' && departments.length === 0 && (
-                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                            Create an active department before assigning this
-                            role.
-                        </p>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-password`}>
-                        Password{requirePassword ? '' : ' (optional)'}
-                    </Label>
-                    <Input
-                        id={`${idPrefix}-password`}
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        required={requirePassword}
-                        aria-invalid={Boolean(errors.password)}
-                        aria-describedby={
-                            errors.password
-                                ? `${idPrefix}-password-error`
-                                : `${idPrefix}-password-help`
-                        }
-                    />
-                    <p
-                        id={`${idPrefix}-password-help`}
-                        className="text-xs text-muted-foreground"
-                    >
-                        {requirePassword
-                            ? 'Use a secure password that meets the application requirements.'
-                            : 'Leave blank to keep the current password.'}
-                    </p>
-                    <InputError
-                        id={`${idPrefix}-password-error`}
-                        message={errors.password}
-                    />
-                </div>
-
-                <div className="grid gap-2">
-                    <Label htmlFor={`${idPrefix}-password-confirmation`}>
-                        Confirm password
-                    </Label>
-                    <Input
-                        id={`${idPrefix}-password-confirmation`}
-                        name="password_confirmation"
-                        type="password"
-                        autoComplete="new-password"
-                        required={requirePassword}
-                        aria-invalid={Boolean(errors.password_confirmation)}
-                        aria-describedby={
-                            errors.password_confirmation
-                                ? `${idPrefix}-password-confirmation-error`
-                                : undefined
-                        }
-                    />
-                    <InputError
-                        id={`${idPrefix}-password-confirmation-error`}
-                        message={errors.password_confirmation}
-                    />
-                </div>
-            </div>
-        </div>
-    );
+function assignmentType(role: UserRole): string {
+    return role === 'office_head'
+        ? 'head'
+        : role === 'executive'
+          ? 'executive'
+          : 'staff';
 }
 
-function CreateUserDialog({
-    departments,
-    roles,
-    teamSlug,
-}: {
-    departments: DepartmentSummary[];
-    roles: SelectOption<UserRole>[];
-    teamSlug: string;
-}) {
-    const [open, setOpen] = useState(false);
-    const [role, setRole] = useState<UserRole>('department_user');
-    const [departmentId, setDepartmentId] = useState('');
-
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button>
-                    <Plus />
-                    New User
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Create user</DialogTitle>
-                    <DialogDescription>
-                        Create an account and assign its operational role and
-                        department access.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <Form
-                    {...store.form(teamSlug)}
-                    errorBag="createUser"
-                    options={{ preserveScroll: true }}
-                    resetOnSuccess
-                    disableWhileProcessing
-                    onSuccess={() => {
-                        setOpen(false);
-                        setRole('department_user');
-                        setDepartmentId('');
-                    }}
-                    className="grid gap-6"
-                >
-                    {({ errors, processing }) => (
-                        <>
-                            <UserFields
-                                departments={departments}
-                                errors={errors}
-                                idPrefix="create-user"
-                                roles={roles}
-                                role={role}
-                                departmentId={departmentId}
-                                onRoleChange={setRole}
-                                onDepartmentChange={setDepartmentId}
-                                requirePassword
-                            />
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setOpen(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button type="submit" disabled={processing}>
-                                    {processing && <Spinner />}
-                                    {processing ? 'Creating...' : 'Create user'}
-                                </Button>
-                            </DialogFooter>
-                        </>
-                    )}
-                </Form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function EditUserDialog({
-    departments,
-    roles,
-    teamSlug,
+function UserDialog({
     user,
+    roles,
+    units,
+    teamSlug,
 }: {
-    departments: DepartmentSummary[];
-    roles: SelectOption<UserRole>[];
+    user?: ManagedUser;
+    roles: Props['roles'];
+    units: Props['organizationalUnits'];
     teamSlug: string;
-    user: AdministrationUser;
 }) {
-    const initialRole = user.role ?? 'department_user';
-    const initialDepartmentId = user.department
-        ? String(user.department.id)
-        : '';
     const [open, setOpen] = useState(false);
-    const [role, setRole] = useState<UserRole>(initialRole);
-    const [departmentId, setDepartmentId] = useState(initialDepartmentId);
-
-    const updateOpen = (nextOpen: boolean): void => {
-        setOpen(nextOpen);
-
-        if (!nextOpen) {
-            setRole(initialRole);
-            setDepartmentId(initialDepartmentId);
-        }
-    };
+    const form = useForm({
+        name: user?.name ?? '',
+        email: user?.email ?? '',
+        password: '',
+        password_confirmation: '',
+        role: user?.role ?? ('staff' as UserRole),
+        assignments: (user?.assignments ?? []).map(
+            (assignment): Assignment => ({
+                organizational_unit_id: String(
+                    assignment.organizational_unit_id,
+                ),
+                assignment_type: assignment.assignment_type,
+                position_title: assignment.position_title ?? '',
+                is_primary: assignment.is_primary,
+                is_active: assignment.is_active,
+                starts_on: assignment.starts_on ?? '',
+                ends_on: assignment.ends_on ?? '',
+            }),
+        ),
+    });
+    const errors: Partial<Record<string, string>> = form.errors;
+    const prefix = `user-${user?.id ?? 'new'}`;
+    const patchAssignment = (row: number, patch: Partial<Assignment>) =>
+        form.setData(
+            'assignments',
+            form.data.assignments.map((assignment, index) =>
+                index === row ? { ...assignment, ...patch } : assignment,
+            ),
+        );
 
     return (
-        <Dialog open={open} onOpenChange={updateOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                setOpen(next);
+
+                if (next) {
+                    form.reset();
+                    form.clearErrors();
+                }
+            }}
+        >
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                    <Pencil />
-                    Edit
+                <Button
+                    variant={user ? 'outline' : 'default'}
+                    size={user ? 'sm' : 'default'}
+                >
+                    {user ? <Pencil /> : <Plus />}
+                    {user ? 'Edit' : 'New user'}
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-2xl">
+            <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>Edit user</DialogTitle>
+                    <DialogTitle>
+                        {user ? 'Edit user' : 'Create user'}
+                    </DialogTitle>
                     <DialogDescription>
-                        Update {user.name}&apos;s account, role, department, or
-                        password.
+                        Choose a system role and organizational assignments.
+                        President and Vice Presidents share the Executive role.
                     </DialogDescription>
                 </DialogHeader>
+                <form
+                    className="grid gap-5"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        const options = {
+                            preserveScroll: true,
+                            onSuccess: () => setOpen(false),
+                        };
 
-                <Form
-                    {...update.form([teamSlug, user.id])}
-                    errorBag={`updateUser${user.id}`}
-                    options={{ preserveScroll: true }}
-                    setDefaultsOnSuccess
-                    resetOnSuccess={['password', 'password_confirmation']}
-                    disableWhileProcessing
-                    onSuccess={() => setOpen(false)}
-                    className="grid gap-6"
+                        if (user) {
+                            form.patch(
+                                update.url([teamSlug, user.id]),
+                                options,
+                            );
+                        } else {
+                            form.post(store.url(teamSlug), options);
+                        }
+                    }}
                 >
-                    {({ errors, processing, recentlySuccessful }) => (
-                        <>
-                            <UserFields
-                                departments={departments}
-                                errors={errors}
-                                idPrefix={`edit-user-${user.id}`}
-                                roles={roles}
-                                role={role}
-                                departmentId={departmentId}
-                                onRoleChange={setRole}
-                                onDepartmentChange={setDepartmentId}
-                                defaults={user}
-                            />
-                            <DialogFooter className="items-center">
-                                {recentlySuccessful && (
-                                    <span className="mr-auto flex items-center gap-1.5 text-sm text-emerald-700 dark:text-emerald-300">
-                                        <CircleCheck className="size-4" />
-                                        Saved
-                                    </span>
-                                )}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {(['name', 'email'] as const).map((field) => (
+                            <div key={field} className="grid gap-2">
+                                <Label htmlFor={prefix + '-' + field}>
+                                    {field === 'name' ? 'Name' : 'Email'}
+                                </Label>
+                                <Input
+                                    id={prefix + '-' + field}
+                                    type={field === 'email' ? 'email' : 'text'}
+                                    value={form.data[field]}
+                                    onChange={(event) =>
+                                        form.setData(field, event.target.value)
+                                    }
+                                    required
+                                />
+                                <InputError message={form.errors[field]} />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        {(['password', 'password_confirmation'] as const).map(
+                            (field) => (
+                                <div key={field} className="grid gap-2">
+                                    <Label htmlFor={prefix + '-' + field}>
+                                        {field === 'password'
+                                            ? user
+                                                ? 'New password (optional)'
+                                                : 'Password'
+                                            : 'Confirm password'}
+                                    </Label>
+                                    <Input
+                                        id={prefix + '-' + field}
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={form.data[field]}
+                                        onChange={(event) =>
+                                            form.setData(
+                                                field,
+                                                event.target.value,
+                                            )
+                                        }
+                                        required={!user}
+                                    />
+                                    <InputError message={form.errors[field]} />
+                                </div>
+                            ),
+                        )}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor={prefix + '-role'}>System role</Label>
+                        <Select
+                            value={form.data.role}
+                            onValueChange={(value: UserRole) => {
+                                form.setData({
+                                    ...form.data,
+                                    role: value,
+                                    assignments:
+                                        value === 'system_admin'
+                                            ? []
+                                            : form.data.assignments.map(
+                                                  (assignment) => ({
+                                                      ...assignment,
+                                                      assignment_type:
+                                                          assignmentType(value),
+                                                  }),
+                                              ),
+                                });
+                            }}
+                        >
+                            <SelectTrigger
+                                id={prefix + '-role'}
+                                className="w-full"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {roles.map((role) => (
+                                    <SelectItem
+                                        key={role.value}
+                                        value={role.value}
+                                    >
+                                        {role.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={form.errors.role} />
+                    </div>
+                    {form.data.role === 'system_admin' ? (
+                        <p className="rounded-lg bg-muted p-3 text-sm">
+                            System Admin manages configuration and can view
+                            records for support. Executive approval and ratings
+                            require executive authority.
+                        </p>
+                    ) : (
+                        <div className="grid gap-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="font-medium">
+                                    Organizational assignments
+                                </p>
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => updateOpen(false)}
+                                    size="sm"
+                                    onClick={() =>
+                                        form.setData('assignments', [
+                                            ...form.data.assignments,
+                                            {
+                                                organizational_unit_id: '',
+                                                assignment_type: assignmentType(
+                                                    form.data.role,
+                                                ),
+                                                position_title: '',
+                                                is_primary:
+                                                    form.data.assignments
+                                                        .length === 0,
+                                                is_active: true,
+                                                starts_on: '',
+                                                ends_on: '',
+                                            },
+                                        ])
+                                    }
                                 >
-                                    Cancel
+                                    <Plus />
+                                    Add assignment
                                 </Button>
-                                <Button type="submit" disabled={processing}>
-                                    {processing && <Spinner />}
-                                    {processing ? 'Saving...' : 'Save changes'}
-                                </Button>
-                            </DialogFooter>
-                        </>
+                            </div>
+                            {form.data.assignments.length === 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                    This account has no organizational access
+                                    until an assignment is added.
+                                </p>
+                            )}
+                            {form.data.assignments.map((assignment, row) => {
+                                const rowPrefix = `${prefix}-assignment-${row}`;
+
+                                return (
+                                    <fieldset
+                                        key={row}
+                                        className="grid gap-4 rounded-lg border p-4"
+                                    >
+                                        <legend className="px-2 text-sm font-medium">
+                                            Assignment {row + 1}
+                                        </legend>
+                                        <div className="grid gap-2">
+                                            <Label
+                                                htmlFor={rowPrefix + '-unit'}
+                                            >
+                                                Organizational unit
+                                            </Label>
+                                            <Select
+                                                value={
+                                                    assignment.organizational_unit_id
+                                                }
+                                                onValueChange={(value) =>
+                                                    patchAssignment(row, {
+                                                        organizational_unit_id:
+                                                            value,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger
+                                                    id={rowPrefix + '-unit'}
+                                                    className="w-full"
+                                                >
+                                                    <SelectValue placeholder="Select a unit" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {units.map((unit) => (
+                                                        <SelectItem
+                                                            key={unit.id}
+                                                            value={String(
+                                                                unit.id,
+                                                            )}
+                                                        >
+                                                            {unit.name}
+                                                            {!unit.is_active
+                                                                ? ' (inactive)'
+                                                                : ''}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <InputError
+                                                message={
+                                                    errors[
+                                                        `assignments.${row}.organizational_unit_id`
+                                                    ]
+                                                }
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label
+                                                htmlFor={rowPrefix + '-title'}
+                                            >
+                                                Position title
+                                            </Label>
+                                            <Input
+                                                id={rowPrefix + '-title'}
+                                                value={
+                                                    assignment.position_title
+                                                }
+                                                onChange={(event) =>
+                                                    patchAssignment(row, {
+                                                        position_title:
+                                                            event.target.value,
+                                                    })
+                                                }
+                                                placeholder="e.g. Vice President for Academic Affairs"
+                                            />
+                                            <InputError
+                                                message={
+                                                    errors[
+                                                        `assignments.${row}.position_title`
+                                                    ]
+                                                }
+                                            />
+                                        </div>
+                                        <div className="grid gap-4 sm:grid-cols-2">
+                                            {(
+                                                [
+                                                    'starts_on',
+                                                    'ends_on',
+                                                ] as const
+                                            ).map((field) => (
+                                                <div
+                                                    key={field}
+                                                    className="grid gap-2"
+                                                >
+                                                    <Label
+                                                        htmlFor={
+                                                            rowPrefix +
+                                                            '-' +
+                                                            field
+                                                        }
+                                                    >
+                                                        {field === 'starts_on'
+                                                            ? 'Starts on (optional)'
+                                                            : 'Ends on (optional)'}
+                                                    </Label>
+                                                    <Input
+                                                        id={
+                                                            rowPrefix +
+                                                            '-' +
+                                                            field
+                                                        }
+                                                        type="date"
+                                                        value={
+                                                            assignment[field]
+                                                        }
+                                                        onChange={(event) =>
+                                                            patchAssignment(
+                                                                row,
+                                                                {
+                                                                    [field]:
+                                                                        event
+                                                                            .target
+                                                                            .value,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                    <InputError
+                                                        message={
+                                                            errors[
+                                                                `assignments.${row}.${field}`
+                                                            ]
+                                                        }
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-4">
+                                            <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id={rowPrefix + '-active'}
+                                                    checked={
+                                                        assignment.is_active
+                                                    }
+                                                    onCheckedChange={(value) =>
+                                                        patchAssignment(row, {
+                                                            is_active:
+                                                                value === true,
+                                                        })
+                                                    }
+                                                />
+                                                <Label
+                                                    htmlFor={
+                                                        rowPrefix + '-active'
+                                                    }
+                                                >
+                                                    Active
+                                                </Label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id={rowPrefix + '-primary'}
+                                                    checked={
+                                                        assignment.is_primary
+                                                    }
+                                                    onCheckedChange={(value) =>
+                                                        patchAssignment(row, {
+                                                            is_primary:
+                                                                value === true,
+                                                        })
+                                                    }
+                                                />
+                                                <Label
+                                                    htmlFor={
+                                                        rowPrefix + '-primary'
+                                                    }
+                                                >
+                                                    Primary
+                                                </Label>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                className="ml-auto"
+                                                onClick={() =>
+                                                    form.setData(
+                                                        'assignments',
+                                                        form.data.assignments.filter(
+                                                            (_, index) =>
+                                                                index !== row,
+                                                        ),
+                                                    )
+                                                }
+                                            >
+                                                <Trash2 />
+                                                Remove assignment
+                                            </Button>
+                                        </div>
+                                        <InputError
+                                            message={
+                                                errors[
+                                                    `assignments.${row}.assignment_type`
+                                                ]
+                                            }
+                                        />
+                                    </fieldset>
+                                );
+                            })}
+                            <InputError message={form.errors.assignments} />
+                        </div>
                     )}
-                </Form>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button disabled={form.processing}>
+                            {form.processing ? 'Saving...' : 'Save user'}
+                        </Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );
 }
 
-export default function UsersIndex({ users, departments, roles }: Props) {
+export default function UsersIndex({
+    users,
+    organizationalUnits,
+    roles,
+}: Props) {
     const { currentTeam } = usePage().props;
 
     if (!currentTeam) {
-        return (
-            <div className="p-6 text-sm text-muted-foreground">
-                Select a team before managing users.
-            </div>
-        );
+        return null;
     }
 
     return (
         <>
             <Head title="Users" />
-            <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:justify-between">
                     <Heading
                         title="Users"
-                        description="Manage accounts, operational roles, and department assignments."
+                        description="Manage accounts, system roles, and organizational assignments."
                     />
-                    <CreateUserDialog
-                        departments={departments}
+                    <UserDialog
                         roles={roles}
+                        units={organizationalUnits}
                         teamSlug={currentTeam.slug}
                     />
                 </div>
-
                 <Card>
-                    <CardHeader className="flex-row items-start justify-between gap-4">
-                        <div className="space-y-1.5">
-                            <CardTitle>User directory</CardTitle>
-                            <CardDescription>
-                                {users.length}{' '}
-                                {users.length === 1 ? 'account' : 'accounts'}
-                            </CardDescription>
-                        </div>
-                        <Users className="size-5 text-muted-foreground" />
+                    <CardHeader>
+                        <CardTitle>User directory</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {users.length === 0 ? (
-                            <div className="rounded-xl border border-dashed p-8 text-center">
-                                <p className="font-medium">No users yet</p>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Create an account and assign its role to get
-                                    started.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="divide-y rounded-xl border">
-                                {users.map((user) => (
-                                    <div
-                                        key={user.id}
-                                        className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between"
-                                    >
-                                        <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:flex-1">
-                                            <div className="min-w-0">
-                                                <p className="truncate font-medium">
-                                                    {user.name}
-                                                </p>
-                                                <p className="truncate text-sm text-muted-foreground">
-                                                    {user.email}
-                                                </p>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-medium">
-                                                    {user.department?.name ??
-                                                        'No department'}
-                                                </p>
-                                                <p className="truncate text-xs text-muted-foreground">
-                                                    {user.department?.code ??
-                                                        'Not department-scoped'}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                                            <StatusBadge
-                                                status={
-                                                    user.role ?? 'unassigned'
-                                                }
-                                                label={
-                                                    user.roleLabel ??
-                                                    'Unassigned'
-                                                }
-                                            />
-                                            <StatusBadge
-                                                status={
-                                                    user.emailVerifiedAt
-                                                        ? 'verified'
-                                                        : 'pending'
-                                                }
-                                                label={
-                                                    user.emailVerifiedAt
-                                                        ? 'Verified'
-                                                        : 'Unverified'
-                                                }
-                                            />
-                                            <EditUserDialog
-                                                key={`${user.id}-${user.name}-${user.email}-${user.role}-${user.department?.id}`}
-                                                departments={departments}
-                                                roles={roles}
-                                                teamSlug={currentTeam.slug}
-                                                user={user}
-                                            />
-                                        </div>
+                        <div className="divide-y rounded-lg border">
+                            {users.map((user) => (
+                                <div
+                                    key={user.id}
+                                    className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="font-medium">
+                                            {user.name}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {user.email}
+                                        </p>
+                                        <p className="mt-1 text-sm">
+                                            {user.assignments
+                                                .filter(
+                                                    (assignment) =>
+                                                        assignment.is_active,
+                                                )
+                                                .map(
+                                                    (assignment) =>
+                                                        assignment.unit_name,
+                                                )
+                                                .join(' / ') ||
+                                                'No active unit assignments'}
+                                        </p>
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                    <div className="flex items-center gap-2">
+                                        <StatusBadge
+                                            status={user.role}
+                                            label={user.roleLabel}
+                                        />
+                                        <UserDialog
+                                            key={JSON.stringify(user)}
+                                            user={user}
+                                            roles={roles}
+                                            units={organizationalUnits}
+                                            teamSlug={currentTeam.slug}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
-
-                <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                    <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-                    <p>
-                        Navigation is a convenience only. All role and
-                        department permissions are enforced by the server.
-                    </p>
-                </div>
             </div>
         </>
     );

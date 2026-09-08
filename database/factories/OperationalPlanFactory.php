@@ -23,7 +23,7 @@ class OperationalPlanFactory extends Factory
     {
         return [
             'academic_year_id' => AcademicYear::factory()->open(),
-            'department_id' => Department::factory(),
+            'organizational_unit_id' => Department::factory(),
             'accountable_user_id' => null,
             'accountable_name' => fake()->name(),
             'accountable_position' => fake()->jobTitle(),

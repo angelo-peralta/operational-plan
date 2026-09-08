@@ -7,12 +7,12 @@ use App\Models\OperationalPlan;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 
-test('key result area permissions follow the parent operational plan edit boundary', function () {
+test('key result area permissions belong to super administrators', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
     $otherDepartment = Department::factory()->create();
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->forDepartment($otherDepartment)->create();
     $draftPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
@@ -38,12 +38,12 @@ test('key result area permissions follow the parent operational plan edit bounda
         'departmentUser.view' => true,
         'otherDepartmentUser.view' => false,
         'administrator.createDraft' => true,
-        'departmentUser.createDraft' => true,
+        'departmentUser.createDraft' => false,
         'reviewer.createDraft' => false,
-        'administrator.createSubmitted' => false,
-        'departmentUser.updateOwn' => true,
+        'administrator.createSubmitted' => true,
+        'departmentUser.updateOwn' => false,
         'otherDepartmentUser.updateOther' => false,
-        'departmentUser.reorderOwn' => true,
+        'departmentUser.reorderOwn' => false,
         'departmentUser.deleteOwn' => false,
     ]);
 });

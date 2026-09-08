@@ -41,7 +41,7 @@ function accomplishmentPolicyContext(): array
 test('view permissions expose accomplishments only to institution reviewers and the owning department', function () {
     extract(accomplishmentPolicyContext());
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->create();
     $unassignedDepartmentUser = User::factory()->create(['department_id' => null]);
 
@@ -69,7 +69,7 @@ test('view permissions expose accomplishments only to institution reviewers and 
 test('create permissions require the owning department approved plan open year and matching open period', function () {
     extract(accomplishmentPolicyContext());
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->create();
     $unassignedDepartmentUser = User::factory()->create(['department_id' => null]);
 
@@ -122,10 +122,10 @@ test('create permissions require the owning department approved plan open year a
     ]);
 });
 
-test('update permissions allow only owning department drafts and never allow deletion', function () {
+test('update permissions allow only owning department drafts and returned reports and never allow deletion', function () {
     extract(accomplishmentPolicyContext());
     $administrator = User::factory()->superAdmin()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $otherDepartmentUser = User::factory()->departmentUser()->create();
 
     $updatePermissions = [];
@@ -142,11 +142,9 @@ test('update permissions allow only owning department drafts and never allow del
     expect($updatePermissions)->toBe([
         AccomplishmentStatus::Draft->value => true,
         AccomplishmentStatus::Submitted->value => false,
-        AccomplishmentStatus::QueuedForAnalysis->value => false,
-        AccomplishmentStatus::Analyzing->value => false,
-        AccomplishmentStatus::ReadyForReview->value => false,
+        AccomplishmentStatus::UnderReview->value => false,
         AccomplishmentStatus::Accepted->value => false,
-        AccomplishmentStatus::Returned->value => false,
+        AccomplishmentStatus::Returned->value => true,
         AccomplishmentStatus::Rejected->value => false,
     ]);
     expect([
@@ -163,5 +161,44 @@ test('update permissions allow only owning department drafts and never allow del
         'departmentUser.delete' => false,
         'administrator.restore' => false,
         'administrator.forceDelete' => false,
+    ]);
+});
+
+test('submit permissions allow only assigned heads with drafts and returned reports', function () {
+    extract(accomplishmentPolicyContext());
+    $administrator = User::factory()->superAdmin()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
+    $otherDepartmentUser = User::factory()->departmentUser()->create();
+    $unassignedDepartmentUser = User::factory()->create(['department_id' => null]);
+    $departmentUser = User::factory()->officeHead()->forDepartment($department)->create();
+    $submitPermissions = [];
+
+    foreach (AccomplishmentStatus::cases() as $status) {
+        $statusPlanItem = PlanItem::factory()->for($keyResultArea)->create();
+        $statusAccomplishment = Accomplishment::factory()
+            ->for($statusPlanItem)
+            ->for($reportingPeriod)
+            ->create(['status' => $status]);
+        $submitPermissions[$status->value] = Gate::forUser($departmentUser)->allows('submit', $statusAccomplishment);
+    }
+
+    expect($submitPermissions)->toBe([
+        AccomplishmentStatus::Draft->value => true,
+        AccomplishmentStatus::Submitted->value => false,
+        AccomplishmentStatus::UnderReview->value => false,
+        AccomplishmentStatus::Accepted->value => false,
+        AccomplishmentStatus::Returned->value => true,
+        AccomplishmentStatus::Rejected->value => false,
+    ]);
+    expect([
+        'administrator.submit' => Gate::forUser($administrator)->allows('submit', $accomplishment),
+        'reviewer.submit' => Gate::forUser($reviewer)->allows('submit', $accomplishment),
+        'otherDepartmentUser.submit' => Gate::forUser($otherDepartmentUser)->allows('submit', $accomplishment),
+        'unassignedDepartmentUser.submit' => Gate::forUser($unassignedDepartmentUser)->allows('submit', $accomplishment),
+    ])->toBe([
+        'administrator.submit' => false,
+        'reviewer.submit' => false,
+        'otherDepartmentUser.submit' => false,
+        'unassignedDepartmentUser.submit' => false,
     ]);
 });

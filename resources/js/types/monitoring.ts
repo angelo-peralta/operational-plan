@@ -1,7 +1,9 @@
+import type { EvaluationHistoryEntry } from './evaluation';
 import type {
     AcademicYearOption,
-    DepartmentSummary,
+    OperationalPlanRemark,
     OperationalPlanStatus,
+    OrganizationalUnitSummary,
     ReportingPeriod,
     TargetOperator,
 } from './operational-plan';
@@ -9,15 +11,33 @@ import type {
 export type AccomplishmentStatus =
     | 'draft'
     | 'submitted'
-    | 'queued_for_analysis'
-    | 'analyzing'
-    | 'ready_for_review'
+    | 'under_review'
     | 'accepted'
     | 'returned'
     | 'rejected';
 
 export type MonitoringReportingPeriod = ReportingPeriod & {
     acceptsSubmissions: boolean;
+};
+
+type AccomplishmentSubmissionStatus =
+    | AccomplishmentStatus
+    | 'queued_for_analysis'
+    | 'analyzing'
+    | 'ready_for_review';
+
+export type AccomplishmentSubmissionHistory = {
+    id: number;
+    revision: number;
+    fromStatus: AccomplishmentSubmissionStatus;
+    toStatus: AccomplishmentSubmissionStatus;
+    toStatusLabel: string;
+    evidenceCount: number;
+    submitter: {
+        id: number;
+        name: string;
+    };
+    submittedAt: string;
 };
 
 export type Accomplishment = {
@@ -30,9 +50,17 @@ export type Accomplishment = {
     submittedAt: string | null;
     resubmittedAt: string | null;
     updatedAt: string | null;
+    createdBy: { id: number; name: string } | null;
+    updatedBy: { id: number; name: string } | null;
     evidence: Evidence[];
+    remarks: OperationalPlanRemark[];
+    submissionBlocker: string | null;
+    submissionHistory: AccomplishmentSubmissionHistory[];
+    evaluationHistory: EvaluationHistoryEntry[];
     permissions: {
+        submitAccomplishment: boolean;
         uploadEvidence: boolean;
+        createRemark: boolean;
     };
 };
 
@@ -44,6 +72,7 @@ export type Evidence = {
     originalFilename: string;
     mimeType: string;
     fileSize: number;
+    checksum: string | null;
     uploadedBy: {
         id: number;
         name: string;
@@ -82,7 +111,7 @@ export type MonitoringKeyResultArea = {
 
 export type MonitoringOperationalPlan = {
     id: number;
-    department: DepartmentSummary;
+    organizationalUnit: OrganizationalUnitSummary;
     goal: string;
     status: OperationalPlanStatus;
     statusLabel: string;

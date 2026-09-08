@@ -1,4 +1,4 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowDown,
@@ -12,9 +12,12 @@ import {
     RotateCcw,
     Send,
     Trash2,
+    Upload,
     Undo2,
 } from 'lucide-react';
 import { useState } from 'react';
+import { AccomplishmentDialog } from '@/components/monitoring/accomplishment-dialog';
+import { EvidenceUploadDialog } from '@/components/monitoring/evidence-upload-dialog';
 import { KeyResultAreaDialog } from '@/components/operational-plans/key-result-area-dialog';
 import { PlanHeaderDialog } from '@/components/operational-plans/plan-header-dialog';
 import { PlanItemDialog } from '@/components/operational-plans/plan-item-dialog';
@@ -39,21 +42,31 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import { home } from '@/routes';
 import { index, official, show } from '@/routes/operational-plans';
-import { reorder as reorderKeyResultAreas } from '@/routes/operational-plans/key-result-areas';
+import {
+    destroy as destroyKeyResultArea,
+    reorder as reorderKeyResultAreas,
+} from '@/routes/operational-plans/key-result-areas';
 import {
     destroy as destroyPlanItem,
     reorder as reorderPlanItems,
 } from '@/routes/operational-plans/key-result-areas/plan-items';
+import {
+    store as storeRemark,
+    update as updateRemark,
+} from '@/routes/operational-plans/remarks';
 import type {
-    CoAccountableDepartment,
-    DepartmentAccountableUser,
+    CoAccountableOrganizationalUnit,
+    AccountableUserOption,
     KeyResultArea,
     OperationalPlan,
+    OperationalPlanRemark,
     OperationalPlanPermissions,
+    OperationalPlanReview,
+    OperationalPlanReportingPeriod,
     OperationalPlanStatus,
     PlanItem,
     SelectOption,
@@ -63,9 +76,13 @@ import type {
 type Props = {
     operationalPlan: OperationalPlan;
     permissions: OperationalPlanPermissions;
-    accountableUsers: DepartmentAccountableUser[];
-    coAccountableDepartments: CoAccountableDepartment[];
+    accountableUsers: AccountableUserOption[];
+    coAccountableOrganizationalUnits: CoAccountableOrganizationalUnit[];
     targetOperators: SelectOption<TargetOperator>[];
+    reportingPeriods: OperationalPlanReportingPeriod[];
+    selectedReportingPeriod: OperationalPlanReportingPeriod | null;
+    review: OperationalPlanReview;
+    remarkOptions: { categories: string[]; fields: string[] };
 };
 
 const operatorLabels: Record<TargetOperator, string> = {
@@ -182,6 +199,68 @@ function DeletePlanItemDialog({
     );
 }
 
+function DeleteKeyResultAreaDialog({
+    teamSlug,
+    operationalPlanId,
+    keyResultArea,
+}: {
+    teamSlug: string;
+    operationalPlanId: number;
+    keyResultArea: KeyResultArea;
+}) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                    <Trash2 />
+                    Remove KRA
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Remove Key Result Area?</DialogTitle>
+                    <DialogDescription>
+                        This removes “{keyResultArea.name}”. A KRA can only be
+                        removed when it has no Plan Items or review remarks.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form
+                    {...destroyKeyResultArea.form([
+                        teamSlug,
+                        operationalPlanId,
+                        keyResultArea.id,
+                    ])}
+                    options={{ preserveScroll: true }}
+                    disableWhileProcessing
+                    onSuccess={() => setOpen(false)}
+                >
+                    {({ processing }) => (
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="destructive"
+                                disabled={processing}
+                            >
+                                {processing && <Spinner />}
+                                {processing ? 'Removing...' : 'Remove KRA'}
+                            </Button>
+                        </DialogFooter>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function PlanItemCard({
     item,
     itemIndex,
@@ -189,8 +268,12 @@ function PlanItemCard({
     operationalPlan,
     teamSlug,
     canEdit,
-    coAccountableDepartments,
+    canReview,
+    coAccountableOrganizationalUnits,
     targetOperators,
+    reviewRemarks,
+    remarkOptions,
+    selectedReportingPeriod,
 }: {
     item: PlanItem;
     itemIndex: number;
@@ -198,11 +281,16 @@ function PlanItemCard({
     operationalPlan: OperationalPlan;
     teamSlug: string;
     canEdit: boolean;
-    coAccountableDepartments: CoAccountableDepartment[];
+    canReview: boolean;
+    coAccountableOrganizationalUnits: CoAccountableOrganizationalUnit[];
     targetOperators: SelectOption<TargetOperator>[];
+    selectedReportingPeriod: OperationalPlanReportingPeriod | null;
+    reviewRemarks: OperationalPlanRemark[];
+    remarkOptions: { categories: string[]; fields: string[] };
 }) {
-    const linkedUnits = item.coAccountableDepartments.map(
-        (department) => department.code ?? department.name,
+    const linkedUnits = item.coAccountableOrganizationalUnits.map(
+        (organizationalUnit) =>
+            organizationalUnit.code ?? organizationalUnit.name,
     );
     const coAccountableUnits = [
         ...linkedUnits,
@@ -211,151 +299,13 @@ function PlanItemCard({
     const itemIds = keyResultArea.planItems.map((planItem) => planItem.id);
 
     return (
-        <article className="grid gap-5 rounded-xl border bg-background p-4 shadow-xs md:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                        Plan Item {itemIndex + 1}
-                    </p>
-                    <h4 className="leading-6 font-semibold">
-                        {item.kpiTargetText}
-                    </h4>
-                </div>
-
-                {canEdit && (
-                    <div className="flex shrink-0 flex-wrap items-center gap-1">
-                        {keyResultArea.planItems.length > 1 && (
-                            <>
-                                <Form
-                                    {...reorderPlanItems.form([
-                                        teamSlug,
-                                        operationalPlan.id,
-                                        keyResultArea.id,
-                                    ])}
-                                    errorBag={`reorderPlanItems${keyResultArea.id}`}
-                                    options={{ preserveScroll: true }}
-                                    disableWhileProcessing
-                                >
-                                    {({ processing }) => (
-                                        <>
-                                            {reorderedIds(
-                                                itemIds,
-                                                itemIndex,
-                                                -1,
-                                            ).map((id) => (
-                                                <input
-                                                    key={id}
-                                                    type="hidden"
-                                                    name="ordered_ids[]"
-                                                    value={id}
-                                                />
-                                            ))}
-                                            <Button
-                                                type="submit"
-                                                variant="ghost"
-                                                size="icon"
-                                                disabled={
-                                                    processing ||
-                                                    itemIndex === 0
-                                                }
-                                                aria-label={`Move Plan Item ${itemIndex + 1} up`}
-                                            >
-                                                <ArrowUp />
-                                            </Button>
-                                        </>
-                                    )}
-                                </Form>
-                                <Form
-                                    {...reorderPlanItems.form([
-                                        teamSlug,
-                                        operationalPlan.id,
-                                        keyResultArea.id,
-                                    ])}
-                                    errorBag={`reorderPlanItems${keyResultArea.id}`}
-                                    options={{ preserveScroll: true }}
-                                    disableWhileProcessing
-                                >
-                                    {({ processing }) => (
-                                        <>
-                                            {reorderedIds(
-                                                itemIds,
-                                                itemIndex,
-                                                1,
-                                            ).map((id) => (
-                                                <input
-                                                    key={id}
-                                                    type="hidden"
-                                                    name="ordered_ids[]"
-                                                    value={id}
-                                                />
-                                            ))}
-                                            <Button
-                                                type="submit"
-                                                variant="ghost"
-                                                size="icon"
-                                                disabled={
-                                                    processing ||
-                                                    itemIndex ===
-                                                        itemIds.length - 1
-                                                }
-                                                aria-label={`Move Plan Item ${itemIndex + 1} down`}
-                                            >
-                                                <ArrowDown />
-                                            </Button>
-                                        </>
-                                    )}
-                                </Form>
-                            </>
-                        )}
-                        <PlanItemDialog
-                            mode="edit"
-                            teamSlug={teamSlug}
-                            operationalPlanId={operationalPlan.id}
-                            keyResultAreaId={keyResultArea.id}
-                            item={item}
-                            departments={coAccountableDepartments}
-                            targetOperators={targetOperators}
-                            trigger={
-                                <Button variant="ghost" size="sm">
-                                    <Pencil />
-                                    Edit
-                                </Button>
-                            }
-                        />
-                        <DeletePlanItemDialog
-                            teamSlug={teamSlug}
-                            operationalPlanId={operationalPlan.id}
-                            keyResultAreaId={keyResultArea.id}
-                            item={item}
-                        />
-                    </div>
-                )}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Objective
-                    </p>
-                    <p className="text-sm leading-6 whitespace-pre-line">
-                        {item.objective}
-                    </p>
-                </div>
-                <div className="space-y-1.5">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Strategy
-                    </p>
-                    <p className="text-sm leading-6 whitespace-pre-line">
-                        {item.strategy ?? '—'}
-                    </p>
-                </div>
-            </div>
-
-            {(item.targetOperator ||
-                item.targetValue ||
-                item.targetUnit ||
-                item.targetFrequency) && (
-                <div className="flex flex-wrap gap-2">
+        <tr id={`plan-item-${item.id}`} className="scroll-mt-6 align-top">
+            <td className="w-12 px-4 py-4 text-sm font-semibold text-muted-foreground">
+                {itemIndex + 1}
+            </td>
+            <td className="min-w-64 px-4 py-4">
+                <p className="leading-6 font-semibold">{item.kpiTargetText}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
                     {item.targetOperator && (
                         <Badge variant="outline">
                             {operatorLabels[item.targetOperator]}
@@ -375,58 +325,331 @@ function PlanItemCard({
                         </Badge>
                     )}
                 </div>
-            )}
-
-            <Separator />
-
-            <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Unit Co-Accountable
-                    </p>
-                    {coAccountableUnits.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                            {coAccountableUnits.map((unit, index) => (
-                                <Badge
-                                    key={`${unit}-${index}`}
-                                    variant="secondary"
-                                >
-                                    {unit}
-                                </Badge>
-                            ))}
-                        </div>
+            </td>
+            <td className="min-w-64 px-4 py-4 text-sm leading-6 whitespace-pre-line">
+                {item.objective}
+            </td>
+            <td className="min-w-56 px-4 py-4 text-sm leading-6 whitespace-pre-line">
+                {item.strategy ?? '—'}
+            </td>
+            <td className="min-w-64 px-4 py-4">
+                <div className="space-y-3 text-sm">
+                    <div>
+                        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                            Co-accountable units
+                        </p>
+                        {coAccountableUnits.length > 0 ? (
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                                {coAccountableUnits.map((unit, index) => (
+                                    <Badge
+                                        key={`${unit}-${index}`}
+                                        variant="secondary"
+                                    >
+                                        {unit}
+                                    </Badge>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="mt-1 text-muted-foreground">—</p>
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                            Resources
+                        </p>
+                        <p className="mt-1 leading-6 whitespace-pre-line">
+                            {item.resourcesNeeded ?? '—'}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                            Evidence requirements
+                        </p>
+                        {item.documentaryEvidenceRequirements.length > 0 ? (
+                            <ul className="mt-1 grid list-disc gap-1 pl-4 leading-5">
+                                {item.documentaryEvidenceRequirements.map(
+                                    (requirement, index) => (
+                                        <li key={`${requirement}-${index}`}>
+                                            {requirement}
+                                        </li>
+                                    ),
+                                )}
+                            </ul>
+                        ) : (
+                            <p className="mt-1 text-muted-foreground">—</p>
+                        )}
+                    </div>
+                </div>
+            </td>
+            <td className="min-w-80 px-4 py-4">
+                <div className="grid gap-3">
+                    {reviewRemarks.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            No evaluation notes yet.
+                        </p>
                     ) : (
-                        <p className="text-sm text-muted-foreground">—</p>
+                        reviewRemarks.map((remark) => (
+                            <div
+                                key={remark.id}
+                                className="grid gap-2 rounded-lg border p-3"
+                            >
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <StatusBadge
+                                        status={remark.status}
+                                        label={remark.statusLabel}
+                                    />
+                                    {remark.fieldKey && (
+                                        <Badge variant="outline">
+                                            {remark.fieldKey.replaceAll(
+                                                '_',
+                                                ' ',
+                                            )}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-sm leading-5 whitespace-pre-line">
+                                    {remark.content}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {remark.author.name} ·{' '}
+                                    {formatDateTime(remark.createdAt)}
+                                </p>
+                                {(remark.canAddress || remark.canResolve) && (
+                                    <Form
+                                        {...updateRemark.form([
+                                            teamSlug,
+                                            operationalPlan.id,
+                                            remark.id,
+                                        ])}
+                                        options={{ preserveScroll: true }}
+                                        className="flex justify-end"
+                                    >
+                                        <input
+                                            type="hidden"
+                                            name="status"
+                                            value={
+                                                remark.canAddress
+                                                    ? 'addressed'
+                                                    : 'resolved'
+                                            }
+                                        />
+                                        <Button
+                                            type="submit"
+                                            size="sm"
+                                            variant="outline"
+                                        >
+                                            {remark.canAddress
+                                                ? 'Mark addressed'
+                                                : 'Resolve'}
+                                        </Button>
+                                    </Form>
+                                )}
+                            </div>
+                        ))
+                    )}
+                    {canReview && (
+                        <Form
+                            {...storeRemark.form([
+                                teamSlug,
+                                operationalPlan.id,
+                            ])}
+                            options={{ preserveScroll: true }}
+                            resetOnSuccess
+                            className="grid gap-2 rounded-lg border border-dashed p-3"
+                        >
+                            <input
+                                type="hidden"
+                                name="target_type"
+                                value="plan_item"
+                            />
+                            <input
+                                type="hidden"
+                                name="target_id"
+                                value={item.id}
+                            />
+                            <select
+                                name="field_key"
+                                className="h-9 rounded-md border bg-background px-3 text-sm"
+                                defaultValue=""
+                            >
+                                <option value="">General evaluation</option>
+                                {remarkOptions.fields.map((field) => (
+                                    <option key={field} value={field}>
+                                        {field.replaceAll('_', ' ')}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                name="category"
+                                className="h-9 rounded-md border bg-background px-3 text-sm"
+                                defaultValue="clarification"
+                            >
+                                {remarkOptions.categories.map((category) => (
+                                    <option key={category} value={category}>
+                                        {category.replaceAll('_', ' ')}
+                                    </option>
+                                ))}
+                            </select>
+                            <Textarea
+                                name="content"
+                                required
+                                placeholder="Add an evaluation note for this item..."
+                            />
+                            <Button
+                                type="submit"
+                                size="sm"
+                                className="justify-self-end"
+                            >
+                                Add evaluation
+                            </Button>
+                        </Form>
                     )}
                 </div>
-                <div className="space-y-2">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Resources Needed
-                    </p>
-                    <p className="text-sm leading-6 whitespace-pre-line">
-                        {item.resourcesNeeded ?? '—'}
-                    </p>
-                </div>
-                <div className="space-y-2">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Documentary Evidence Requirements
-                    </p>
-                    {item.documentaryEvidenceRequirements.length > 0 ? (
-                        <ul className="grid list-disc gap-1 pl-4 text-sm leading-5">
-                            {item.documentaryEvidenceRequirements.map(
-                                (requirement, index) => (
-                                    <li key={`${requirement}-${index}`}>
-                                        {requirement}
-                                    </li>
-                                ),
+            </td>
+            <td className="min-w-48 px-4 py-4">
+                <div className="flex flex-wrap items-center gap-1">
+                    {selectedReportingPeriod &&
+                        item.permissions.createAccomplishment && (
+                            <AccomplishmentDialog
+                                teamSlug={teamSlug}
+                                reportingPeriod={selectedReportingPeriod}
+                                planItem={item}
+                                trigger={
+                                    <Button variant="outline" size="sm">
+                                        <FileText />
+                                        Report accomplishment
+                                    </Button>
+                                }
+                            />
+                        )}
+                    {item.accomplishment?.permissions.uploadEvidence &&
+                        selectedReportingPeriod && (
+                            <EvidenceUploadDialog
+                                teamSlug={teamSlug}
+                                reportingPeriod={selectedReportingPeriod}
+                                planItem={item}
+                                accomplishment={item.accomplishment}
+                                trigger={
+                                    <Button variant="outline" size="sm">
+                                        <Upload />
+                                        Upload evidence
+                                    </Button>
+                                }
+                            />
+                        )}
+                    {canEdit && (
+                        <>
+                            {keyResultArea.planItems.length > 1 && (
+                                <>
+                                    <Form
+                                        {...reorderPlanItems.form([
+                                            teamSlug,
+                                            operationalPlan.id,
+                                            keyResultArea.id,
+                                        ])}
+                                        errorBag={`reorderPlanItems${keyResultArea.id}`}
+                                        options={{ preserveScroll: true }}
+                                        disableWhileProcessing
+                                    >
+                                        {({ processing }) => (
+                                            <>
+                                                {reorderedIds(
+                                                    itemIds,
+                                                    itemIndex,
+                                                    -1,
+                                                ).map((id) => (
+                                                    <input
+                                                        key={id}
+                                                        type="hidden"
+                                                        name="ordered_ids[]"
+                                                        value={id}
+                                                    />
+                                                ))}
+                                                <Button
+                                                    type="submit"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={
+                                                        processing ||
+                                                        itemIndex === 0
+                                                    }
+                                                    aria-label={`Move Plan Item ${itemIndex + 1} up`}
+                                                >
+                                                    <ArrowUp />
+                                                </Button>
+                                            </>
+                                        )}
+                                    </Form>
+                                    <Form
+                                        {...reorderPlanItems.form([
+                                            teamSlug,
+                                            operationalPlan.id,
+                                            keyResultArea.id,
+                                        ])}
+                                        errorBag={`reorderPlanItems${keyResultArea.id}`}
+                                        options={{ preserveScroll: true }}
+                                        disableWhileProcessing
+                                    >
+                                        {({ processing }) => (
+                                            <>
+                                                {reorderedIds(
+                                                    itemIds,
+                                                    itemIndex,
+                                                    1,
+                                                ).map((id) => (
+                                                    <input
+                                                        key={id}
+                                                        type="hidden"
+                                                        name="ordered_ids[]"
+                                                        value={id}
+                                                    />
+                                                ))}
+                                                <Button
+                                                    type="submit"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={
+                                                        processing ||
+                                                        itemIndex ===
+                                                            itemIds.length - 1
+                                                    }
+                                                    aria-label={`Move Plan Item ${itemIndex + 1} down`}
+                                                >
+                                                    <ArrowDown />
+                                                </Button>
+                                            </>
+                                        )}
+                                    </Form>
+                                </>
                             )}
-                        </ul>
-                    ) : (
-                        <p className="text-sm text-muted-foreground">—</p>
+                            <PlanItemDialog
+                                mode="edit"
+                                teamSlug={teamSlug}
+                                operationalPlanId={operationalPlan.id}
+                                keyResultAreaId={keyResultArea.id}
+                                item={item}
+                                organizationalUnits={
+                                    coAccountableOrganizationalUnits
+                                }
+                                targetOperators={targetOperators}
+                                trigger={
+                                    <Button variant="ghost" size="sm">
+                                        <Pencil />
+                                        Edit
+                                    </Button>
+                                }
+                            />
+                            <DeletePlanItemDialog
+                                teamSlug={teamSlug}
+                                operationalPlanId={operationalPlan.id}
+                                keyResultAreaId={keyResultArea.id}
+                                item={item}
+                            />
+                        </>
                     )}
                 </div>
-            </div>
-        </article>
+            </td>
+        </tr>
     );
 }
 
@@ -436,21 +659,27 @@ function KeyResultAreaCard({
     operationalPlan,
     permissions,
     teamSlug,
-    coAccountableDepartments,
+    coAccountableOrganizationalUnits,
     targetOperators,
+    review,
+    remarkOptions,
+    selectedReportingPeriod,
 }: {
     keyResultArea: KeyResultArea;
     kraIndex: number;
     operationalPlan: OperationalPlan;
     permissions: OperationalPlanPermissions;
     teamSlug: string;
-    coAccountableDepartments: CoAccountableDepartment[];
+    coAccountableOrganizationalUnits: CoAccountableOrganizationalUnit[];
     targetOperators: SelectOption<TargetOperator>[];
+    selectedReportingPeriod: OperationalPlanReportingPeriod | null;
+    review: OperationalPlanReview;
+    remarkOptions: { categories: string[]; fields: string[] };
 }) {
     const kraIds = operationalPlan.keyResultAreas.map((kra) => kra.id);
 
     return (
-        <Card className="gap-5">
+        <Card id={`kra-${keyResultArea.id}`} className="scroll-mt-6 gap-5">
             <CardHeader className="border-b pb-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 space-y-2">
@@ -560,18 +789,27 @@ function KeyResultAreaCard({
                                         </Form>
                                     </>
                                 )}
-                            <KeyResultAreaDialog
-                                mode="edit"
-                                teamSlug={teamSlug}
-                                operationalPlanId={operationalPlan.id}
-                                keyResultArea={keyResultArea}
-                                trigger={
-                                    <Button variant="ghost" size="sm">
-                                        <Pencil />
-                                        Edit KRA
-                                    </Button>
-                                }
-                            />
+                            {permissions.updateKeyResultArea && (
+                                <KeyResultAreaDialog
+                                    mode="edit"
+                                    teamSlug={teamSlug}
+                                    operationalPlanId={operationalPlan.id}
+                                    keyResultArea={keyResultArea}
+                                    trigger={
+                                        <Button variant="ghost" size="sm">
+                                            <Pencil />
+                                            Edit KRA
+                                        </Button>
+                                    }
+                                />
+                            )}
+                            {permissions.deleteKeyResultArea && (
+                                <DeleteKeyResultAreaDialog
+                                    teamSlug={teamSlug}
+                                    operationalPlanId={operationalPlan.id}
+                                    keyResultArea={keyResultArea}
+                                />
+                            )}
                         </div>
                     )}
                 </div>
@@ -587,19 +825,65 @@ function KeyResultAreaCard({
                         </p>
                     </div>
                 ) : (
-                    keyResultArea.planItems.map((item, itemIndex) => (
-                        <PlanItemCard
-                            key={item.id}
-                            item={item}
-                            itemIndex={itemIndex}
-                            keyResultArea={keyResultArea}
-                            operationalPlan={operationalPlan}
-                            teamSlug={teamSlug}
-                            canEdit={permissions.updatePlan}
-                            coAccountableDepartments={coAccountableDepartments}
-                            targetOperators={targetOperators}
-                        />
-                    ))
+                    <div className="overflow-x-auto rounded-lg border">
+                        <table className="w-full min-w-[1500px] border-collapse text-left">
+                            <thead className="bg-muted/40 text-xs tracking-wide text-muted-foreground uppercase">
+                                <tr>
+                                    <th className="w-12 px-4 py-3 font-medium">
+                                        #
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        KPI / Target
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        Objective
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        Strategy
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        Resources and evidence
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        Evaluation
+                                    </th>
+                                    <th className="px-4 py-3 font-medium">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {keyResultArea.planItems.map(
+                                    (item, itemIndex) => (
+                                        <PlanItemCard
+                                            key={item.id}
+                                            item={item}
+                                            itemIndex={itemIndex}
+                                            keyResultArea={keyResultArea}
+                                            operationalPlan={operationalPlan}
+                                            teamSlug={teamSlug}
+                                            canEdit={permissions.updatePlan}
+                                            canReview={permissions.createRemark}
+                                            coAccountableOrganizationalUnits={
+                                                coAccountableOrganizationalUnits
+                                            }
+                                            targetOperators={targetOperators}
+                                            selectedReportingPeriod={
+                                                selectedReportingPeriod
+                                            }
+                                            reviewRemarks={review.remarks.filter(
+                                                (remark) =>
+                                                    remark.targetType ===
+                                                        'plan_item' &&
+                                                    remark.targetId === item.id,
+                                            )}
+                                            remarkOptions={remarkOptions}
+                                        />
+                                    ),
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
 
                 {permissions.updatePlan && (
@@ -608,7 +892,7 @@ function KeyResultAreaCard({
                         teamSlug={teamSlug}
                         operationalPlanId={operationalPlan.id}
                         keyResultAreaId={keyResultArea.id}
-                        departments={coAccountableDepartments}
+                        organizationalUnits={coAccountableOrganizationalUnits}
                         targetOperators={targetOperators}
                         trigger={
                             <Button variant="outline" className="w-full">
@@ -655,8 +939,12 @@ export default function OperationalPlanShow({
     operationalPlan,
     permissions,
     accountableUsers,
-    coAccountableDepartments,
+    coAccountableOrganizationalUnits,
     targetOperators,
+    review,
+    remarkOptions,
+    reportingPeriods,
+    selectedReportingPeriod,
 }: Props) {
     const { currentTeam } = usePage().props;
 
@@ -671,7 +959,7 @@ export default function OperationalPlanShow({
     return (
         <>
             <Head
-                title={`${operationalPlan.department.code ?? operationalPlan.department.name} Operational Plan`}
+                title={`${operationalPlan.organizationalUnit.code ?? operationalPlan.organizationalUnit.name} Operational Plan`}
             />
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -687,7 +975,7 @@ export default function OperationalPlanShow({
                         </div>
                         <div>
                             <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
-                                {operationalPlan.department.name}
+                                {operationalPlan.organizationalUnit.name}
                             </h1>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 Operational Plan structured editor
@@ -808,7 +1096,7 @@ export default function OperationalPlanShow({
                         </Alert>
                     )}
 
-                <Card>
+                <Card id="plan-overview" className="scroll-mt-6">
                     <CardHeader>
                         <CardTitle>Plan details</CardTitle>
                         <CardDescription>
@@ -832,11 +1120,11 @@ export default function OperationalPlanShow({
                                 Office
                             </p>
                             <p className="font-medium">
-                                {operationalPlan.department.name}
+                                {operationalPlan.organizationalUnit.name}
                             </p>
-                            {operationalPlan.department.code && (
+                            {operationalPlan.organizationalUnit.code && (
                                 <p className="font-mono text-xs text-muted-foreground">
-                                    {operationalPlan.department.code}
+                                    {operationalPlan.organizationalUnit.code}
                                 </p>
                             )}
                         </div>
@@ -863,6 +1151,46 @@ export default function OperationalPlanShow({
                         </div>
                     </CardContent>
                 </Card>
+
+                {reportingPeriods.length > 0 && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="font-semibold">Reporting period</h2>
+                            <p className="text-sm text-muted-foreground">
+                                Choose the period for accomplishment evidence
+                                uploads.
+                            </p>
+                        </div>
+                        <select
+                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                            value={selectedReportingPeriod?.id ?? ''}
+                            onChange={(event) =>
+                                router.get(
+                                    show(
+                                        [currentTeam.slug, operationalPlan.id],
+                                        {
+                                            query: {
+                                                reporting_period:
+                                                    event.target.value,
+                                            },
+                                        },
+                                    ),
+                                    {},
+                                    {
+                                        preserveScroll: true,
+                                        preserveState: true,
+                                    },
+                                )
+                            }
+                        >
+                            {reportingPeriods.map((period) => (
+                                <option key={period.id} value={period.id}>
+                                    {period.name} ({period.status})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 <section className="grid gap-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -915,10 +1243,15 @@ export default function OperationalPlanShow({
                                     operationalPlan={operationalPlan}
                                     permissions={permissions}
                                     teamSlug={currentTeam.slug}
-                                    coAccountableDepartments={
-                                        coAccountableDepartments
+                                    coAccountableOrganizationalUnits={
+                                        coAccountableOrganizationalUnits
                                     }
                                     targetOperators={targetOperators}
+                                    review={review}
+                                    remarkOptions={remarkOptions}
+                                    selectedReportingPeriod={
+                                        selectedReportingPeriod
+                                    }
                                 />
                             ),
                         )
@@ -985,8 +1318,8 @@ OperationalPlanShow.layout = (props: {
         },
         {
             title:
-                props.operationalPlan.department.code ??
-                props.operationalPlan.department.name,
+                props.operationalPlan.organizationalUnit.code ??
+                props.operationalPlan.organizationalUnit.name,
             href: props.currentTeam
                 ? show([props.currentTeam.slug, props.operationalPlan.id])
                 : home(),

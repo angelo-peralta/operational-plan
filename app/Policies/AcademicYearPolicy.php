@@ -28,7 +28,7 @@ class AcademicYearPolicy
      */
     public function create(User $user): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSystemAdmin();
     }
 
     /**
@@ -36,7 +36,7 @@ class AcademicYearPolicy
      */
     public function update(User $user, AcademicYear $academicYear): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSystemAdmin();
     }
 
     /**

@@ -2,12 +2,15 @@
 
 namespace App\Data;
 
+use App\Enums\AccomplishmentStatus;
 use App\Models\AcademicYear;
 use App\Models\Accomplishment;
+use App\Models\AccomplishmentSubmission;
 use App\Models\Evidence;
 use App\Models\KeyResultArea;
 use App\Models\OperationalPlan;
 use App\Models\PlanItem;
+use App\Models\Remark;
 use App\Models\ReportingPeriod;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
@@ -50,10 +53,10 @@ class MonitoringData
     ): array {
         return [
             'id' => $operationalPlan->id,
-            'department' => [
-                'id' => $operationalPlan->department->id,
-                'name' => $operationalPlan->department->name,
-                'code' => $operationalPlan->department->code,
+            'organizationalUnit' => [
+                'id' => $operationalPlan->organizationalUnit->id,
+                'name' => $operationalPlan->organizationalUnit->name,
+                'code' => $operationalPlan->organizationalUnit->code,
             ],
             'goal' => $operationalPlan->goal,
             'status' => $operationalPlan->status->value,
@@ -124,6 +127,35 @@ class MonitoringData
     /** @return array<string, mixed> */
     private static function accomplishment(Accomplishment $accomplishment, User $user): array
     {
+        $canSubmit = Gate::forUser($user)->allows('submit', $accomplishment);
+        $operationalPlan = $accomplishment->planItem->keyResultArea->operationalPlan;
+        $remarks = $accomplishment->remarks;
+
+        $accomplishment->remarks->each(function (Remark $remark) use ($accomplishment, $operationalPlan): void {
+            $remark->setRelation('remarkable', $accomplishment);
+            $remark->setRelation('operationalPlan', $operationalPlan);
+        });
+
+        foreach ($accomplishment->evidence as $evidence) {
+            $evidence->setRelation('accomplishment', $accomplishment);
+            $evidence->remarks->each(function (Remark $remark) use ($evidence, $operationalPlan): void {
+                $remark->setRelation('remarkable', $evidence);
+                $remark->setRelation('operationalPlan', $operationalPlan);
+            });
+            $remarks = $remarks->concat($evidence->remarks);
+        }
+
+        foreach ($accomplishment->submissions as $submission) {
+            foreach ($submission->evaluations as $evaluation) {
+                $evaluation->setRelation('submission', $submission);
+                $evaluation->fieldRemarks->each(function (Remark $remark) use ($evaluation, $operationalPlan): void {
+                    $remark->setRelation('remarkable', $evaluation);
+                    $remark->setRelation('operationalPlan', $operationalPlan);
+                });
+                $remarks = $remarks->concat($evaluation->fieldRemarks);
+            }
+        }
+
         return [
             'id' => $accomplishment->id,
             'reportedValue' => $accomplishment->reported_value,
@@ -134,6 +166,33 @@ class MonitoringData
             'submittedAt' => $accomplishment->submitted_at?->toISOString(),
             'resubmittedAt' => $accomplishment->resubmitted_at?->toISOString(),
             'updatedAt' => $accomplishment->updated_at?->toISOString(),
+            'createdBy' => $accomplishment->creator ? [
+                'id' => $accomplishment->creator->id,
+                'name' => $accomplishment->creator->name,
+            ] : null,
+            'updatedBy' => $accomplishment->editor ? [
+                'id' => $accomplishment->editor->id,
+                'name' => $accomplishment->editor->name,
+            ] : null,
+            'submissionBlocker' => $canSubmit
+                ? self::submissionBlocker($accomplishment)
+                : null,
+            'submissionHistory' => $accomplishment->submissions
+                ->map(fn (AccomplishmentSubmission $submission): array => [
+                    'id' => $submission->id,
+                    'revision' => $submission->revision,
+                    'fromStatus' => $submission->from_status->value,
+                    'toStatus' => $submission->to_status->value,
+                    'toStatusLabel' => $submission->to_status->label(),
+                    'evidenceCount' => $submission->evidence_count,
+                    'submitter' => [
+                        'id' => $submission->submitter->id,
+                        'name' => $submission->submitter->name,
+                    ],
+                    'submittedAt' => $submission->submitted_at->toISOString(),
+                ])
+                ->values(),
+            'evaluationHistory' => EvaluationData::history($accomplishment),
             'evidence' => $accomplishment->evidence
                 ->map(fn (Evidence $evidence): array => [
                     'id' => $evidence->id,
@@ -143,6 +202,7 @@ class MonitoringData
                     'originalFilename' => $evidence->original_filename,
                     'mimeType' => $evidence->mime_type,
                     'fileSize' => $evidence->file_size,
+                    'checksum' => $evidence->checksum,
                     'uploadedBy' => [
                         'id' => $evidence->uploader->id,
                         'name' => $evidence->uploader->name,
@@ -150,9 +210,44 @@ class MonitoringData
                     'createdAt' => $evidence->created_at?->toISOString(),
                 ])
                 ->values(),
+            'remarks' => $remarks
+                ->sortBy(fn (Remark $remark): string => $remark->created_at?->toISOString() ?? '')
+                ->map(fn (Remark $remark): array => OperationalPlanReviewData::remark($remark, $user))
+                ->values(),
             'permissions' => [
                 'uploadEvidence' => Gate::forUser($user)->allows('create', [Evidence::class, $accomplishment]),
+                'submitAccomplishment' => $canSubmit,
+                'createRemark' => Gate::forUser($user)->allows('create', [Remark::class, $operationalPlan]),
             ],
         ];
+    }
+
+    private static function submissionBlocker(Accomplishment $accomplishment): ?string
+    {
+        if (blank($accomplishment->reported_value) && blank($accomplishment->accomplishment_text)) {
+            return __('Enter a reported value or accomplishment description before submitting.');
+        }
+
+        $evidenceCount = $accomplishment->evidence->count();
+
+        if ($evidenceCount === 0) {
+            return __('Upload at least one evidence file before submitting.');
+        }
+
+        if ($accomplishment->status !== AccomplishmentStatus::Returned) {
+            return null;
+        }
+
+        $latestSubmission = $accomplishment->submissions->first();
+
+        if (! $latestSubmission instanceof AccomplishmentSubmission) {
+            return __('Previous submission history is unavailable. Contact an administrator before resubmitting.');
+        }
+
+        if ($evidenceCount <= $latestSubmission->evidence_count) {
+            return __('Upload at least one additional evidence file before resubmitting.');
+        }
+
+        return null;
     }
 }

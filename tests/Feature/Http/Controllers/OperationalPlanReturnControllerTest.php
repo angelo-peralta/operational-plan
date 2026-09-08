@@ -17,7 +17,7 @@ test('reviewers return a submitted plan with required remarks and a decision sna
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create(['goal' => 'Goal before return']);
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)
@@ -52,7 +52,7 @@ test('returning a plan requires a substantive reason', function () {
         ->for($academicYear, 'academicYear')
         ->for(Department::factory())
         ->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($operationalPlan->department)->create();
 
     $response = $this
         ->actingAs($reviewer)
@@ -72,8 +72,8 @@ test('returning a plan requires a substantive reason', function () {
 test('return and resubmission cycles preserve every decision and historical snapshot', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $departmentUser = User::factory()->officeHead()->forDepartment($department)->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $operationalPlan = OperationalPlan::factory()
         ->submitted()
         ->for($academicYear, 'academicYear')
@@ -155,7 +155,7 @@ test('return and resubmission cycles preserve every decision and historical snap
 test('department users cannot return submitted plans for revision', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $departmentUser = User::factory()->officeHead()->forDepartment($department)->create();
     $operationalPlan = OperationalPlan::factory()->submitted()->for($academicYear, 'academicYear')->for($department)->create();
 
     $response = $this

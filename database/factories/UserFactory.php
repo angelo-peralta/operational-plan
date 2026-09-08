@@ -5,6 +5,8 @@ namespace Database\Factories;
 use App\Enums\TeamRole;
 use App\Enums\UserRole;
 use App\Models\Department;
+use App\Models\OrganizationalUnit;
+use App\Models\Role;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -28,6 +30,8 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $role = Role::systemFor(UserRole::Staff);
+
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
@@ -38,7 +42,8 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
             'department_id' => null,
-            'role' => UserRole::DepartmentUser,
+            'role_id' => $role->id,
+            'role' => $role->access_level,
         ];
     }
 
@@ -57,6 +62,14 @@ class UserFactory extends Factory
             ]);
 
             $user->switchTeam($team);
+
+            if ($user->department_id !== null && $user->role->assignmentType() !== null) {
+                $user->organizationalUnitAssignments()->create([
+                    'organizational_unit_id' => $user->department_id,
+                    'assignment_type' => $user->role->assignmentType(),
+                    'is_primary' => true,
+                ]);
+            }
         });
     }
 
@@ -75,10 +88,8 @@ class UserFactory extends Factory
      */
     public function superAdmin(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'department_id' => null,
-            'role' => UserRole::SuperAdmin,
-        ]);
+        return $this->forOperationalRole(Role::systemFor(UserRole::SystemAdmin))
+            ->state(fn (array $attributes): array => ['department_id' => null]);
     }
 
     /**
@@ -86,10 +97,8 @@ class UserFactory extends Factory
      */
     public function reviewer(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'department_id' => null,
-            'role' => UserRole::Reviewer,
-        ]);
+        return $this->forOperationalRole(Role::systemFor(UserRole::Executive))
+            ->state(fn (array $attributes): array => ['department_id' => null]);
     }
 
     /**
@@ -97,9 +106,52 @@ class UserFactory extends Factory
      */
     public function departmentUser(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'department_id' => Department::factory(),
-            'role' => UserRole::DepartmentUser,
+        return $this->forOperationalRole(Role::systemFor(UserRole::Staff))
+            ->state(fn (array $attributes): array => ['department_id' => Department::factory()]);
+    }
+
+    public function systemAdmin(): static
+    {
+        return $this->superAdmin();
+    }
+
+    public function executive(): static
+    {
+        return $this->reviewer();
+    }
+
+    public function officeHead(): static
+    {
+        return $this->forOperationalRole(Role::systemFor(UserRole::OfficeHead))
+            ->state(fn (): array => ['department_id' => Department::factory()]);
+    }
+
+    public function staff(): static
+    {
+        return $this->departmentUser();
+    }
+
+    public function assignedToUnit(OrganizationalUnit|Department $unit): static
+    {
+        return $this->state(fn (): array => ['department_id' => $unit->id]);
+    }
+
+    public function executiveOver(OrganizationalUnit|Department ...$units): static
+    {
+        $root = OrganizationalUnit::factory()->university()->create();
+
+        foreach ($units as $unit) {
+            OrganizationalUnit::query()->whereKey($unit->id)->update(['parent_id' => $root->id]);
+        }
+
+        return $this->executive()->assignedToUnit($root);
+    }
+
+    public function forOperationalRole(Role $role): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'role_id' => $role->id,
+            'role' => $role->access_level,
         ]);
     }
 

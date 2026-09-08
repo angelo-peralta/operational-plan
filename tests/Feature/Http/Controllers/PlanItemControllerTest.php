@@ -47,7 +47,7 @@ test('department users append a structured plan item with documentary and co-acc
             'operational_plan' => $operationalPlan,
             'key_result_area' => $keyResultArea,
         ]), validPhaseTwoPlanItemData([
-            'co_accountable_department_ids' => [
+            'co_accountable_organizational_unit_ids' => [
                 $firstCoAccountableDepartment->id,
                 $secondCoAccountableDepartment->id,
             ],
@@ -65,7 +65,7 @@ test('department users append a structured plan item with documentary and co-acc
         ->manual_co_accountable_units->toBe(['VPA', 'CEARA'])
         ->created_by->toBe($departmentUser->id)
         ->updated_by->toBe($departmentUser->id);
-    expect($planItem->coAccountableDepartments()->pluck('departments.id')->sort()->values()->all())
+    expect($planItem->coAccountableOrganizationalUnits()->pluck('organizational_units.id')->sort()->values()->all())
         ->toBe(collect([$firstCoAccountableDepartment->id, $secondCoAccountableDepartment->id])->sort()->values()->all());
 });
 
@@ -134,7 +134,7 @@ test('plan item updates replace documentary and co-accountable data atomically',
         'documentary_evidence_requirements' => ['Old report'],
         'manual_co_accountable_units' => ['Old unit'],
     ]);
-    $planItem->coAccountableDepartments()->attach($oldCoAccountableDepartment);
+    $planItem->coAccountableOrganizationalUnits()->attach($oldCoAccountableDepartment);
 
     $response = $this
         ->actingAs($departmentUser)
@@ -148,7 +148,7 @@ test('plan item updates replace documentary and co-accountable data atomically',
             'objective' => 'Updated objective',
             'documentary_evidence_requirements' => ['Updated report'],
             'manual_co_accountable_units' => ['Updated unit'],
-            'co_accountable_department_ids' => [$newCoAccountableDepartment->id],
+            'co_accountable_organizational_unit_ids' => [$newCoAccountableDepartment->id],
         ]));
 
     $response->assertSessionHasNoErrors()->assertRedirect();
@@ -160,11 +160,11 @@ test('plan item updates replace documentary and co-accountable data atomically',
         ->updated_by->toBe($departmentUser->id);
     $this->assertDatabaseMissing('plan_item_co_accountables', [
         'plan_item_id' => $planItem->id,
-        'department_id' => $oldCoAccountableDepartment->id,
+        'organizational_unit_id' => $oldCoAccountableDepartment->id,
     ]);
     $this->assertDatabaseHas('plan_item_co_accountables', [
         'plan_item_id' => $planItem->id,
-        'department_id' => $newCoAccountableDepartment->id,
+        'organizational_unit_id' => $newCoAccountableDepartment->id,
     ]);
 });
 
@@ -176,7 +176,7 @@ test('department users can delete a plan item from an editable plan', function (
     $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
     $keyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
     $planItem = PlanItem::factory()->for($keyResultArea)->create();
-    $planItem->coAccountableDepartments()->attach($coAccountableDepartment);
+    $planItem->coAccountableOrganizationalUnits()->attach($coAccountableDepartment);
 
     $response = $this
         ->actingAs($departmentUser)
@@ -215,6 +215,46 @@ test('plan items with semester accomplishments cannot be deleted', function () {
 
     $response->assertSessionHasErrors(['plan_item']);
     $this->assertModelExists($planItem);
+});
+
+test('plan items with immutable review remarks cannot be deleted', function () {
+    $academicYear = AcademicYear::factory()->open()->create();
+    $department = Department::factory()->create();
+    $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
+    $operationalPlan = OperationalPlan::factory()->for($academicYear, 'academicYear')->for($department)->create();
+    $keyResultArea = KeyResultArea::factory()->for($operationalPlan)->create();
+    $planItem = PlanItem::factory()->for($keyResultArea)->create();
+    $remark = $planItem->remarks()->create([
+        'academic_year_id' => $academicYear->id,
+        'operational_plan_id' => $operationalPlan->id,
+        'author_id' => $reviewer->id,
+        'field_key' => 'objective',
+        'category' => 'clarification',
+        'content' => 'Preserve this review observation.',
+        'status' => 'open',
+    ]);
+    $remarkHistory = $remark->statusHistories()->create([
+        'actor_id' => $reviewer->id,
+        'from_status' => null,
+        'to_status' => 'open',
+        'created_at' => now(),
+    ]);
+
+    $response = $this
+        ->actingAs($departmentUser)
+        ->withSession([ResolveAcademicYearContext::SESSION_KEY => $academicYear->id])
+        ->delete(route('operational-plans.key-result-areas.plan-items.destroy', [
+            'current_team' => $departmentUser->currentTeam,
+            'operational_plan' => $operationalPlan,
+            'key_result_area' => $keyResultArea,
+            'plan_item' => $planItem,
+        ]));
+
+    $response->assertSessionHasErrors(['plan_item']);
+    $this->assertModelExists($planItem);
+    $this->assertModelExists($remark);
+    $this->assertModelExists($remarkHistory);
 });
 
 test('department users can reorder every plan item in an editable KRA', function () {
@@ -276,7 +316,7 @@ test('plan item reorder rejects an incomplete ordering without changing position
 test('reviewers and submitted plans forbid source plan item edits', function () {
     $academicYear = AcademicYear::factory()->open()->create();
     $department = Department::factory()->create();
-    $reviewer = User::factory()->reviewer()->create();
+    $reviewer = User::factory()->executiveOver($department)->create();
     $departmentUser = User::factory()->departmentUser()->forDepartment($department)->create();
     $submittedPlan = OperationalPlan::factory()->submitted()->for($academicYear, 'academicYear')->for($department)->create();
     $keyResultArea = KeyResultArea::factory()->for($submittedPlan)->create();

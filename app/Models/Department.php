@@ -29,6 +29,8 @@ class Department extends Model
     /** @use HasFactory<DepartmentFactory> */
     use HasFactory;
 
+    protected $table = 'organizational_units';
+
     /**
      * The model's default values for attributes.
      *

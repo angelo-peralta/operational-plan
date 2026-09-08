@@ -35,6 +35,7 @@ class UpdateAccomplishment
                     $context['planItem'],
                     $data['reported_value'],
                 ),
+                'updated_by' => $actor->id,
             ]);
 
             return $lockedAccomplishment;
